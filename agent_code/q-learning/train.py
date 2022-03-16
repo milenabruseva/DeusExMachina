@@ -86,20 +86,28 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         json.dump(self.q_table.to_json(orient="index"), q_table_file, ensure_ascii=False, indent=4)
 
 
+def state_to_events(self, old_game_state: dict, action_taken: str, new_game_state: dict) -> List[str]:
+    custom_events = []
 
-def reward_from_state(self, game_state: dict) -> int:
-    """
-    *This is not a required function, but an idea to structure your code.*
+    if old_game_state is None:
+        # End of round
+        won = True
+        my_score = new_game_state["self"][1]
+        tot_enemy_score = sum([enemy[1] for enemy in new_game_state["others"]])
+        points_left = (3*5 + 9*1) - (my_score + tot_enemy_score)
 
-    Here you can modify the rewards your agent get so as to en/discourage
-    certain behavior.
-    """
-    game_rewards = {
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-    }
+        # Check if probably won
+        for enemy in new_game_state["others"]:
+            if my_score < enemy[1] + points_left:
+                won = False
+                break
 
-    # Calculate reward
-    reward = 0
+        if won:
+            custom_events.append(ce.PROBABLY_WON)
+        else:
+            custom_events.append(ce.PROBABLY_LOST)
 
-    return reward
+    else:
+        pass
+
+    return custom_events
