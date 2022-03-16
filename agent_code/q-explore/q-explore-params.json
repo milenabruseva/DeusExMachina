@@ -1,0 +1,5 @@
+{
+  "learning_rate": 0.01,
+  "reward_decay": 0.9,
+  "exploration_reward": 10
+}
