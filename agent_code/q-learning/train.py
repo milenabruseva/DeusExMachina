@@ -2,31 +2,21 @@ from typing import List
 import json
 
 import events as e
-from .callbacks import state_to_features, check_state_exist
-
-
-# Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
+import settings as s
+from ..custom_events import reward_from_events
+from ..custom_events import CustomEvents as ce
+from .callbacks import check_state_exist
+from ..features import LocalVision
 
 
 def setup_training(self):
     """
     Initialise self for training purpose.
-
     This is called after `setup` in callbacks.py.
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    with open("rewards.json") as rewards_file:
-        params = json.load(rewards_file)
-        self.rewards = {
-            "won": params["won"],
-            "lost": params["lost"]
-        }
+    pass
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -47,19 +37,24 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
 
-    #self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
     if old_game_state is None:
         return
 
-    old_state_str = str(state_to_features(old_game_state))
-    new_state_str = str(state_to_features(new_game_state))
-    reward = reward_from_state(self, new_game_state)
+    old_state_str = str(LocalVision(old_game_state))
+    new_state_str = str(LocalVision(new_game_state))
+
+    # Calculate custom events from states
+    events.extend(state_to_events(self, old_game_state, self_action, new_game_state))
+    reward = reward_from_events(events)
 
     check_state_exist(self,new_state_str)
     q_old = self.q_table.loc[old_state_str, self_action]
 
     q_update = reward + self.gamma * self.q_table.loc[new_state_str, :].max()
     self.q_table.loc[old_state_str, self_action] += self.lr * (q_update - q_old)
+
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -74,26 +69,22 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    #self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
-    old_state_str = str(state_to_features(last_game_state))
+    old_state_str = str(LocalVision(last_game_state))
     check_state_exist(self, old_state_str)
     q_old = self.q_table.loc[old_state_str, last_action]
-    won = True
-    my_score = last_game_state["self"][1]
 
-    for enemy in last_game_state["others"]:
-        if my_score < enemy[1]:
-            won = False
-            break
-    reward = self.rewards["won"] if won else self.rewards["lost"]
-
-    q_update = reward
+    # Calculate custom events from states
+    events.extend(state_to_events(self, None, last_action, last_game_state))
+    q_update = reward_from_events(events)
     self.q_table.loc[old_state_str, last_action] += self.lr * (q_update - q_old)
 
     # Store the q_table as json
     with open("q_table.json", "w") as q_table_file:
         json.dump(self.q_table.to_json(orient="index"), q_table_file, ensure_ascii=False, indent=4)
+
 
 
 def reward_from_state(self, game_state: dict) -> int:
