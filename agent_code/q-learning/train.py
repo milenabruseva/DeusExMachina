@@ -6,7 +6,7 @@ import settings as s
 from ..custom_events import reward_from_events
 from ..custom_events import CustomEvents as ce
 from .callbacks import check_state_exist
-from ..features import LocalVision
+from ..features import RollingWindow as LocalVision
 
 
 def setup_training(self):

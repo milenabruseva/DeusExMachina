@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from ..features import LocalVision
+from ..features import RollingWindow as LocalVision
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -51,6 +51,12 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
+
+    #state = LocalVision(game_state)
+    #print(state.vision.T)
+    #print(state.explosion_map.T)
+    #print("-----------------------")
+
     state_str= str(LocalVision(game_state))
     check_state_exist(self,state_str)
 
