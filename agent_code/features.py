@@ -1,6 +1,9 @@
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
+from typing import List, Tuple
+
 import numpy as np
 
+### Abstract Feature Base Class
 
 class Features:
     @abstractmethod
@@ -20,6 +23,24 @@ class Features:
         pass
 
 
+def state_dict_to_feature(state_dict, feature_type) -> Features:
+    if feature_type == "LocalVision":
+        return LocalVision(state_dict)
+    elif feature_type == "RollingWindow":
+        return RollingWindow(state_dict)
+    else:
+        return None
+
+def state_dict_to_feature_str(state_dict, feature_type):
+    if feature_type == "LocalVision":
+        return str(LocalVision(state_dict))
+    elif feature_type == "RollingWindow":
+        return RollingWindow(state_dict).get_all_sym_str()
+    else:
+        return None
+
+### Helper functions
+
 def get_tile_type(coord, coins, bombs, arena):
     if coord in coins:
         return 2
@@ -29,6 +50,33 @@ def get_tile_type(coord, coins, bombs, arena):
         return arena[coord]
 
 
+def get_blast_coords(bomb_pos, arena):
+    x, y = bomb_pos[0], bomb_pos[1]
+    blast_coords = [(x, y)]
+
+    for i in range(1, 4):
+        if arena[x + i, y] == -1:
+            break
+        blast_coords.append((x + i, y))
+    for i in range(1, 4):
+        if arena[x - i, y] == -1:
+            break
+        blast_coords.append((x - i, y))
+    for i in range(1, 4):
+        if arena[x, y + i] == -1:
+            break
+        blast_coords.append((x, y + i))
+    for i in range(1, 4):
+        if arena[x, y - i] == -1:
+            break
+        blast_coords.append((x, y - i))
+
+    return blast_coords
+
+
+### Feature Implementations
+
+# Plus shaped local vision
 class LocalVision(Features):
     __slots__ = ("posx", "posy",
                  "left", "up", "right", "down", "origin",
@@ -86,12 +134,14 @@ class LocalVision(Features):
                str(self.right) + "|" + str(self.down) + "|" + str(self.origin) + "|" + str(self.has_bomb)
 
 
+# 5x5 tiles Rolling Windows
+
 def getWindowOrigin(player_location, arena):
     windows_center_x = player_x = player_location[0]
     windows_center_y = player_y = player_location[1]
     # check overlap left right
     overlap_left = 3 - player_x
-    overlap_right =  (arena.shape[0] - 4) - player_x
+    overlap_right = (arena.shape[0] - 4) - player_x
     overlap_up = 3 - player_y
     overlap_down = (arena.shape[1] - 4) - player_y
 
@@ -107,28 +157,10 @@ def getWindowOrigin(player_location, arena):
     return np.array([windows_center_x, windows_center_y])
 
 
-def get_blast_coords(bomb_pos, arena):
-    x, y = bomb_pos[0], bomb_pos[1]
-    blast_coords = [(x, y)]
-
-    for i in range(1, 4):
-        if arena[x + i, y] == -1:
-            break
-        blast_coords.append((x + i, y))
-    for i in range(1, 4):
-        if arena[x - i, y] == -1:
-            break
-        blast_coords.append((x - i, y))
-    for i in range(1, 4):
-        if arena[x, y + i] == -1:
-            break
-        blast_coords.append((x, y + i))
-    for i in range(1, 4):
-        if arena[x, y - i] == -1:
-            break
-        blast_coords.append((x, y - i))
-
-    return blast_coords
+def windows_to_str(vision, explosion):
+    vision_str = ''.join(str(e) for e in vision.flatten())
+    explosion_str = ''.join(str(e) for e in explosion.flatten())
+    return vision_str + "|" + explosion_str
 
 
 class RollingWindow(Features):
@@ -138,9 +170,10 @@ class RollingWindow(Features):
     # explosion_map : 5x5 grid tracing player showing explosions
     # no danger: 0, would_die_if_moved_onto/explosion: 1, in 1 round: 2, in 2 rounds: 3, in 3 rounds: 4, in 4 rounds: 5
 
-    #has bomb, nearest enemy outside of grid(direction, manhattan distance)
+    # todo: has bomb, nearest enemy outside of grid(direction, manhattan distance)
 
     def __init__(self, game_state: dict):
+        # Relevant Game State Information
         arena = np.array([game_state["field"]])[0]
         coins = game_state["coins"]
         bombs_coords = []
@@ -157,18 +190,23 @@ class RollingWindow(Features):
                     blast_coords.append(coord)
                     blast_countdowns.append(bombs_countdown[idx] + 1)
                 else:
-                    idx = blast_coords.index(coord)
-                    blast_countdowns[idx] = min(blast_countdowns[idx], bombs_countdown[idx] + 1)
+                    idxx = blast_coords.index(coord)
+                    blast_countdowns[idxx] = min(blast_countdowns[idxx], bombs_countdown[idx] + 1)
         explosion_map = game_state["explosion_map"]
 
+        # Player bomb status
+        self.has_bomb_left = game_state["self"][2]
+
+        # Agent locations
+        player_location = game_state["self"][3]
         enemy_locations = []
         if len(game_state["others"]):
             for i in range(len(game_state["others"])):
                 enemy_locations.append(game_state["others"][i][3])
 
-        player_location = game_state["self"][3]
-        self.vision = np.zeros((5,5), dtype=np.int32)
-        self.explosion_map = np.zeros((5,5), dtype=np.int32)
+        # Windows
+        self.vision = np.zeros((5,5), dtype=np.int8)
+        self.explosion_map = np.zeros((5,5), dtype=np.int8)
 
         window_origin = getWindowOrigin(player_location, arena)
 
@@ -181,6 +219,7 @@ class RollingWindow(Features):
         tile_states = ["free", "crate", "walls", "player", "enemy", "coin", "bomb", "player_bomb", "enemy_bomb"]
         explosion_states = ["safe", "explosion", "1", "2", "3", "4", "5"]
 
+        # Populate windows
         for i in range(self.vision.shape[0]):
             for j in range(self.vision.shape[1]):
                 arena_xy = window_origin[0] + window[i, j][0], window_origin[1] + window[i, j][1]
@@ -208,9 +247,24 @@ class RollingWindow(Features):
                     self.explosion_map[i, j] = explosion_states.index("explosion")
 
 
-
-
     def __repr__(self):
-        vision = ''.join(str(e) for e in self.vision)
-        bombs = ''.join(str(e) for e in self.explosion_map)
-        return vision + "|" + bombs
+        return str(int(self.has_bomb_left)) + "|" + windows_to_str(self.vision, self.explosion_map)
+
+
+    def get_all_sym_str(self) -> tuple[list[str], list[tuple[int, int]]]:
+        transforms = []
+        sym_str = []
+
+        for rot in range(4):
+            for flip in [0, 1]:
+                transforms.append((rot, flip))
+
+                transformed_vision = np.rot90(self.vision, k=rot)
+                transformed_explosion = np.rot90(self.explosion_map, k=rot)
+                if flip:
+                    transformed_vision = transformed_vision.T
+                    transformed_explosion = transformed_explosion.T
+                sym_str.append(str(int(self.has_bomb_left)) + "|" + windows_to_str(transformed_vision, transformed_explosion))
+
+        return sym_str, transforms
+

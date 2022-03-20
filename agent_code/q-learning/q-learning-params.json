@@ -2,5 +2,8 @@
   "learning_rate": 0.01,
   "reward_decay": 0.9,
   "e_greedy": 0.3,
-  "train_fast": false
+  "train_fast": true,
+  "feature": "RollingWindow",
+  "q_table_id": "3_strong_rule_coin_heaven",
+  "save_n_rounds": 1000
 }
