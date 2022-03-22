@@ -20,7 +20,7 @@ def setup_training(self):
     """
 
     # Setup rewards
-    self.reward_giver = RewardGiver(self.reward_set)
+    self.reward_giver = RewardGiver(self.event_reward_set, self.dyn_rewards)
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -56,7 +56,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     action = self.ACTIONS.index(self_action)
 
     # Calculate rewards
-    reward = self.reward_giver.rewards_from_events(events)
+    reward = self.reward_giver.rewards_from_events(events) +\
+             self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
 
     # Update Q-Value
     # Symmetry check
@@ -141,7 +142,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.qn_table[old_state_str][action + len(self.ACTIONS)] += 1
 
     q_old = self.qn_table[old_state_str][action]
-    q_update = self.reward_giver.rewards_from_events(events)
+    q_update = self.reward_giver.rewards_from_events(events) +\
+             self.reward_giver.dynamic_rewards(last_game_state, last_action, None)
     self.qn_table[old_state_str][action] += self.lr * (q_update - q_old)
 
     # Store the qn_table as json every 100 rounds

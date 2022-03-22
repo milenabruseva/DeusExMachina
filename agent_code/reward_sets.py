@@ -1,9 +1,10 @@
 from typing import List
 import events as e
 from .custom_events import CustomEvents as ce
+from .custom_events import manhattan_distance
 
 
-### Reward Sets as dicts
+### Event Reward Sets as dicts
 
 game_rewards_no_1 = {
     e.COIN_COLLECTED: 10,
@@ -23,31 +24,69 @@ game_rewards_no_1 = {
     ce.PROBABLY_LOST: -100
 }
 
+# Dynamic Reward Functions
+
+def nearest_coin_distance(game_state: dict):
+    if game_state['coins']:
+        player_pos = game_state['self'][3]
+        min_coin_dist = 99
+        for coin_pos in game_state['coins']:
+            dist = manhattan_distance(player_pos, coin_pos)
+            if dist < min_coin_dist:
+                min_coin_dist = dist
+
+        return 1 / min_coin_dist**2 # todo: can change weight factor here
+
+    else:
+        return 0
+
+
 
 
 ### string to reward set dict
 
 reward_set_strings = {"no_1": game_rewards_no_1}
 
-
+dynamic_rewards_strings = {"coin_dist": nearest_coin_distance}
 
 class RewardGiver:
-    __slots__ = "reward_set"
-    reward_set : dict
+    __slots__ = ("event_reward_set", "dynamic_reward_set")
+    event_reward_set : dict
+    dynamic_reward_set : list
 
 
-    def __init__(self, reward_set: str) -> None:
-        self.reward_set = reward_set_strings[reward_set]
+    def __init__(self, reward_set: str, dynamic_reward_set = None) -> None:
+        self.event_reward_set = reward_set_strings[reward_set]
+        if dynamic_reward_set is not None:
+            self.dynamic_reward_set = dynamic_reward_set
+        else:
+            self.dynamic_reward_set = []
 
 
     def rewards_from_events(self, events: List[str]) -> int:
         """
-        Calculate total reward.
+        Calculate sum of event-based rewards.
         """
+
         reward_sum = 0
+
+        # Event based
         for event in events:
-            if event in self.reward_set:
-                reward_sum += self.reward_set[event]
+            if event in self.event_reward_set:
+                reward_sum += self.event_reward_set[event]
         # self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+
         return reward_sum
 
+
+    def dynamic_rewards(self, old_game_state: dict, action_taken: str, new_game_state: dict):
+        """
+        Calculate sum of dynamic rewards.
+        """
+        reward_sum = 0
+
+        if "coin_dist" in self.dynamic_reward_set:
+            reward_sum += nearest_coin_distance(new_game_state)
+
+
+        return reward_sum

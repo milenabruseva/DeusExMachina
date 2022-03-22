@@ -21,7 +21,7 @@ def setup_training(self):
     """
 
     # Setup rewards
-    self.reward_giver = RewardGiver(self.reward_set)
+    self.reward_giver = RewardGiver(self.event_reward_set, self.dyn_rewards)
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -58,7 +58,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     next_action = self.ACTIONS.index(act(self, new_game_state))
 
     # Calculate rewards
-    reward = self.reward_giver.rewards_from_events(events)
+    reward = self.reward_giver.rewards_from_events(events) +\
+             self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
 
     # Update Q-Value
     # Symmetry check
@@ -144,7 +145,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
     q_old = self.q_table[old_state_str][action]
-    q_update = self.reward_giver.rewards_from_events(events)
+    q_update = self.reward_giver.rewards_from_events(events) +\
+             self.reward_giver.dynamic_rewards(last_game_state, last_action, None)
     error = q_update - q_old
 
     # increase trace amount for visited state-action pair
