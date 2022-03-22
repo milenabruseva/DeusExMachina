@@ -8,6 +8,7 @@ import random
 
 from ..features import state_dict_to_feature_str
 
+ALGORITHM = 'q-learning'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 
@@ -44,7 +45,8 @@ def setup(self):
             with open(file, "r") as q_table_file:
                 last_q_table_dict = json.load(q_table_file)
                 if "meta" in last_q_table_dict:
-                    if last_q_table_dict["meta"]["feature"] == self.feature and \
+                    if last_q_table_dict["meta"]["algorithm"] == ALGORITHM and\
+                            last_q_table_dict["meta"]["feature"] == self.feature and \
                             last_q_table_dict["meta"]["q_table_id"] == self.q_table_id:
                         self.proper_filename = file
                         break
@@ -57,7 +59,7 @@ def setup(self):
         if not self.train:
             self.logger.warn("Not training and no q_table found")
         self.logger.info(f"No q_table*.json found, for feature {self.feature} and id {self.q_table_id}. Empty one is used")
-        self.proper_filename = f'q_table_id_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
+        self.proper_filename = f'q_table_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
 
    # Action layout for symmetry transformations
     self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
@@ -114,7 +116,7 @@ def act(self, game_state: dict) -> str:
             transformed_action_layout = self.action_layout
             if transform[1]:
                 transformed_action_layout = transformed_action_layout.T
-            transformed_action_layout = np.rot90(self.action_layout, k=(-1) * transform[0])
+            transformed_action_layout = np.rot90(transformed_action_layout, k=(-1) * transform[0])
             action = action_layout_to_action(self, transformed_action_layout, action)
 
     return ACTIONS[action]

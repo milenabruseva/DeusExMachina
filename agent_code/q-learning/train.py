@@ -9,6 +9,7 @@ from ..custom_events import CustomEvents as ce
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action
 from ..features import state_dict_to_feature_str
 
+from .callbacks import ALGORITHM
 
 def setup_training(self):
     """
@@ -131,7 +132,6 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                     transformed_action_layout = transformed_action_layout.T
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
-    #check_state_exist_and_add(self, old_state_str) todo: not needed because old_game_state is new_game_state of last step
     q_old = self.q_table[old_state_str][action]
     q_update = reward_from_events(events)
     self.q_table[old_state_str][action] += self.lr * (q_update - q_old)
@@ -140,7 +140,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if (last_game_state["round"] % self.save_n_rounds) == 0:
         with open(self.proper_filename, "w") as q_table_file:
             q_table = self.q_table
-            q_table["meta"] = {"feature": self.feature, "q_table_id": self.q_table_id}
+            q_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
             json.dump(q_table, q_table_file, indent=4, sort_keys=True)
 
 

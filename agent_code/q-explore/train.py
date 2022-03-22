@@ -1,32 +1,25 @@
 from typing import List
 import json
+import numpy as np
 
 import events as e
-from .callbacks import state_to_features, check_state_exist
+import settings as s
+from ..custom_events import reward_from_events
+from ..custom_events import CustomEvents as ce
+from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action
+from ..features import state_dict_to_feature_str
 
-
-# Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
-
+from .callbacks import ALGORITHM
 
 def setup_training(self):
     """
     Initialise self for training purpose.
-
     This is called after `setup` in callbacks.py.
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    with open("rewards.json") as rewards_file:
-        params = json.load(rewards_file)
-        self.rewards = {
-            "won": params["won"],
-            "lost": params["lost"]
-        }
+
+    pass
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -47,22 +40,59 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
 
-    #self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
     if old_game_state is None:
         return
 
-    old_state_str = str(state_to_features(old_game_state))
-    new_state_str = str(state_to_features(new_game_state))
-    reward = reward_from_state(self, new_game_state)
+    # Calculate custom events from states
+    events.extend(state_to_events(self, old_game_state, self_action, new_game_state))
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
-    # old_game_state visited +1
-    self.n_table.loc[old_state_str, self_action] += 1
+    # Transform state to all equivalent strings and action to index
+    old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
+    new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 
-    check_state_exist(self,new_state_str)
-    q_old = self.q_table.loc[old_state_str, self_action]
+    action = self.ACTIONS.index(self_action)
 
-    q_update = reward + self.gamma * (exploration_function(self, self.q_table.loc[new_state_str, :], self.n_table.loc[new_state_str, :])).max()
-    self.q_table.loc[old_state_str, self_action] += self.lr * (q_update - q_old)
+    # Calculate rewards
+    reward = reward_from_events(events)
+
+    # Update Q-Value
+    # Symmetry check
+    if type(old_state_str) is not str:
+        if self.feature != "RollingWindow":
+            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        old_idx = check_state_exist_w_sym(self, old_state_str[0])
+        if old_idx is None:
+            # Just use the first entry w/o transform
+            old_state_str = old_state_str[0][0]
+        else:
+            # Use transformed
+            transform = old_state_str[1][old_idx]
+            old_state_str = old_state_str[0][old_idx]
+            if not (action >= 4): # wait or bomb
+                transformed_action_layout = np.rot90(self.action_layout, k=transform[0])
+                if transform[1]:
+                    transformed_action_layout = transformed_action_layout.T
+                action = action_layout_to_action(self, transformed_action_layout, action)
+        new_idx = check_state_exist_w_sym(self, new_state_str[0])
+        if new_idx is None:
+            # Just use the first entry w/o transform
+            new_state_str = new_state_str[0][0]
+        else:
+            # Use transformed
+            new_state_str = new_state_str[0][new_idx]
+
+    check_state_exist_and_add(self, new_state_str)
+
+    # old state-action pair visited ++1
+    self.n_table[old_state_str][action] += 1
+
+    q_old = self.q_table[old_state_str][action]
+    q_update = reward + self.gamma *\
+               max_exploration_function(self, self.q_table[new_state_str], self.n_table[new_state_str])
+    self.q_table[old_state_str][action] += self.lr * (q_update - q_old)
+
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -77,51 +107,90 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    #self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
 
-    old_state_str = str(state_to_features(last_game_state))
+    # Calculate custom events from states
+    events.extend(state_to_events(self, None, last_action, last_game_state))
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
-    # old_game_state visited +1
-    self.n_table.loc[old_state_str, last_action] += 1
+    # Transform state to string and action to index
+    old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
+    action = self.ACTIONS.index(last_action)
 
-    check_state_exist(self, old_state_str)
-    q_old = self.q_table.loc[old_state_str, last_action]
-    won = True
-    my_score = last_game_state["self"][1]
+    # Update Q-Value
+    # Symmetry check
+    if type(old_state_str) is not str:
+        if self.feature != "RollingWindow":
+            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        old_idx = check_state_exist_w_sym(self, old_state_str[0])
+        if old_idx is None:
+            # Just use the first entry w/o transform
+            old_state_str = old_state_str[0][0]
+        else:
+            # Use transformed
+            transform = old_state_str[1][old_idx]
+            old_state_str = old_state_str[0][old_idx]
+            if not (action >= 4): # wait or bomb
+                transformed_action_layout = np.rot90(self.action_layout, k=transform[0])
+                if transform[1]:
+                    transformed_action_layout = transformed_action_layout.T
+                action = action_layout_to_action(self, transformed_action_layout, action)
 
-    for enemy in last_game_state["others"]:
-        if my_score < enemy[1]:
-            won = False
-            break
-    reward = self.rewards["won"] if won else self.rewards["lost"]
+    # old state-action pair visited ++1
+    self.n_table[old_state_str][action] += 1
 
-    q_update = reward
-    self.q_table.loc[old_state_str, last_action] += self.lr * (q_update - q_old)
+    q_old = self.q_table[old_state_str][action]
+    q_update = reward_from_events(events)
+    self.q_table[old_state_str][action] += self.lr * (q_update - q_old)
 
-    # Store the q_table as json
-    with open("q_table.json", "w") as q_table_file:
-        json.dump(self.q_table.to_json(orient="index"), q_table_file, ensure_ascii=False, indent=4)
-    # Store the n_table as json
-    with open("n_table.json", "w") as n_table_file:
-        json.dump(self.n_table.to_json(orient="index"), n_table_file, ensure_ascii=False, indent=4)
+    # Store the q_table as json every 100 rounds
+    if (last_game_state["round"] % self.save_n_rounds) == 0:
+        with open(self.q_table_filename, "w") as q_table_file, open(self.n_table_filename, "w") as n_table_file:
+            q_table = self.q_table
+            n_table = self.n_table
+            q_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
+            n_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
+            json.dump(q_table, q_table_file, indent=4, sort_keys=True)
+            json.dump(n_table, n_table_file, indent=4, sort_keys=True)
 
 
-def reward_from_state(self, game_state: dict) -> int:
-    """
-    *This is not a required function, but an idea to structure your code.*
 
-    Here you can modify the rewards your agent get so as to en/discourage
-    certain behavior.
-    """
-    game_rewards = {
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-    }
+def state_to_events(self, old_game_state: dict, action_taken: str, new_game_state: dict) -> List[str]:
+    custom_events = []
 
-    # Calculate reward
-    reward = 0
+    if old_game_state is None:
+        # End of round
+        won = True
+        my_score = new_game_state["self"][1]
+        tot_enemy_score = sum([enemy[1] for enemy in new_game_state["others"]])
+        points_left = (3*5 + 9*1) - (my_score + tot_enemy_score)
 
-    return reward
+        # Check if probably won
+        for enemy in new_game_state["others"]:
+            if my_score < enemy[1] + points_left:
+                won = False
+                break
 
-def exploration_function(self, q_value, visit_count: int):
-    return q_value + self.exp / visit_count
+        if won:
+            custom_events.append(ce.PROBABLY_WON)
+        else:
+            custom_events.append(ce.PROBABLY_LOST)
+
+    else:
+        pass
+
+    return custom_events
+
+
+def exploration_function(self, q_values, visit_counts):
+    values = []
+    for i in range(6):
+        values.append(q_values[i] + self.exp / visit_counts[i])
+    return values
+
+
+def max_exploration_function(self, q_values, visit_counts):
+    values = []
+    for i in range(6):
+        values.append(q_values[i] + self.exp / visit_counts[i])
+    return max(values)
