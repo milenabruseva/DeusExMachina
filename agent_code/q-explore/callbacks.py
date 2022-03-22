@@ -30,6 +30,7 @@ def setup(self):
         self.lr = params["learning_rate"]
         self.gamma = params["reward_decay"]
         self.exp = params["exploration_reward"]
+        self.reward_set = params["reward_set"]
         self.train_fast = params["train_fast"]
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]

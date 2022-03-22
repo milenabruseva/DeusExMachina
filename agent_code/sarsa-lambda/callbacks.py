@@ -1,6 +1,5 @@
 import os
 import datetime
-import copy
 import glob
 import json
 import numpy as np
@@ -32,6 +31,7 @@ def setup(self):
         self.gamma = params["reward_decay"]
         self.epsilon = params["e_greedy"]
         self.lambda_ = params["trace_decay"]
+        self.reward_set = params["reward_set"]
         self.train_fast = params["train_fast"]
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]

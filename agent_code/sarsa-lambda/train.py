@@ -4,12 +4,13 @@ import numpy as np
 
 import events as e
 import settings as s
-from ..custom_events import reward_from_events
-from ..custom_events import CustomEvents as ce
-from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str
 
 from .callbacks import ALGORITHM
+from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
+from ..features import state_dict_to_feature_str
+from ..reward_sets import RewardGiver
+from ..custom_events import state_to_events
+
 
 def setup_training(self):
     """
@@ -19,7 +20,8 @@ def setup_training(self):
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
 
-    pass
+    # Setup rewards
+    self.reward_giver = RewardGiver(self.reward_set)
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -44,7 +46,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         return
 
     # Calculate custom events from states
-    events.extend(state_to_events(self, old_game_state, self_action, new_game_state))
+    events.extend(state_to_events(old_game_state, self_action, new_game_state))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
@@ -56,7 +58,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     next_action = self.ACTIONS.index(act(self, new_game_state))
 
     # Calculate rewards
-    reward = reward_from_events(events)
+    reward = self.reward_giver.rewards_from_events(events)
 
     # Update Q-Value
     # Symmetry check
@@ -114,7 +116,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
 
     # Calculate custom events from states
-    events.extend(state_to_events(self, None, last_action, last_game_state))
+    events.extend(state_to_events(None, last_action, last_game_state))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
@@ -142,7 +144,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
     q_old = self.q_table[old_state_str][action]
-    q_update = reward_from_events(events)
+    q_update = self.reward_giver.rewards_from_events(events)
     error = q_update - q_old
 
     # increase trace amount for visited state-action pair
@@ -162,31 +164,4 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             q_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
             json.dump(q_table, q_table_file, indent=4, sort_keys=True)
 
-
-
-def state_to_events(self, old_game_state: dict, action_taken: str, new_game_state: dict) -> List[str]:
-    custom_events = []
-
-    if old_game_state is None:
-        # End of round
-        won = True
-        my_score = new_game_state["self"][1]
-        tot_enemy_score = sum([enemy[1] for enemy in new_game_state["others"]])
-        points_left = (3*5 + 9*1) - (my_score + tot_enemy_score)
-
-        # Check if probably won
-        for enemy in new_game_state["others"]:
-            if my_score < enemy[1] + points_left:
-                won = False
-                break
-
-        if won:
-            custom_events.append(ce.PROBABLY_WON)
-        else:
-            custom_events.append(ce.PROBABLY_LOST)
-
-    else:
-        pass
-
-    return custom_events
 

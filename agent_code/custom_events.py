@@ -1,39 +1,35 @@
 from typing import List
-import events as e
 
 class CustomEvents:
-    #__slots__ = ("WON_ROUND", "LOST_ROUND")
     PROBABLY_WON = "WON_ROUND"
     PROBABLY_LOST = "LOST_ROUND"
-    #BOMB_WHEN_ENEMY_CLOSE
-    #if aggressive MOVED_CLOSER_TO_ENEMY
+    # todo: BOMB_WHEN_ENEMY_CLOSE
+    # todo: if aggressive MOVED_CLOSER_TO_ENEMY
 
-game_rewards = {
-    e.COIN_COLLECTED: 100,
-    e.KILLED_OPPONENT: 500,
-    e.CRATE_DESTROYED: 30,
-    e.GOT_KILLED: -300,
-    e.INVALID_ACTION: -5,
-    e.MOVED_UP: -1,
-    e.MOVED_DOWN: -1,
-    e.MOVED_RIGHT: -1,
-    e.MOVED_LEFT: -1,
-    e.WAITED: -1,
-    e.BOMB_DROPPED: 2,
-    CustomEvents.PROBABLY_WON: 1000,
-    CustomEvents.PROBABLY_LOST: -1000
-}
 
-def reward_from_events(events: List[str]) -> int:
-    """
-    *This is not a required function, but an idea to structure your code.*
+def state_to_events(old_game_state: dict, action_taken: str, new_game_state: dict) -> List[str]:
+    custom_events = []
 
-    Here you can modify the rewards your agent get so as to en/discourage
-    certain behavior.
-    """
-    reward_sum = 0
-    for event in events:
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
-    #self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    return reward_sum
+    if old_game_state is None:
+        # End of round
+        won = True
+        my_score = new_game_state["self"][1]
+        tot_enemy_score = sum([enemy[1] for enemy in new_game_state["others"]])
+        points_left = (3 * 5 + 9 * 1) - (my_score + tot_enemy_score)
+
+        # Check if probably won
+        for enemy in new_game_state["others"]:
+            if my_score < enemy[1] + points_left:
+                won = False
+                break
+
+        if won:
+            custom_events.append(CustomEvents.PROBABLY_WON)
+        else:
+            custom_events.append(CustomEvents.PROBABLY_LOST)
+
+    else:
+        # Additional custom events if not End of Round
+        pass
+
+    return custom_events
