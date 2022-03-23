@@ -7,6 +7,7 @@ import numpy as np
 import random
 
 from ..features import state_dict_to_feature_str
+from ..parameter_decay import Explorer
 
 ALGORITHM = 'sarsa-lambda'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -27,42 +28,67 @@ def setup(self):
         self.logger.info("Loading sarsa-lambda parameters from json file")
 
         params = json.load(params_file)
-        self.lr = params["learning_rate"]
+
         self.gamma = params["reward_decay"]
-        self.epsilon = params["e_greedy"]
+        self.explorer_type = params["explorer"]
+        self.exp_param = params["exp_param"]
+
+        self.learning_type = params["learning_type"]
+        self.learning_param = params["learning_param"]
         self.lambda_ = params["trace_decay"]
+        self.save_n_rounds = params["save_n_rounds"]
+        self.train_fast = params["train_fast"]
+
         self.event_reward_set = params["event_reward_set"]
         self.dyn_rewards = params["dyn_rewards"]
-        self.train_fast = params["train_fast"]
+
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]
-        self.save_n_rounds = params["save_n_rounds"]
     self.q_table = {}
+    self.n_table = {}
+    self.explorer = Explorer(self.explorer_type, self.exp_param)
 
-    # load q_table from json
+    # Check for q/n_table and load q_table from json
     q_table_filenames = glob.glob('q_table*.json')
-    self.proper_filename = ''
+    self.q_table_filename = ''
+    self.n_table_filename = ''
     last_q_table_dict = None
     for file in q_table_filenames:
         if not os.stat(file).st_size == 0:
             with open(file, "r") as q_table_file:
                 last_q_table_dict = json.load(q_table_file)
                 if "meta" in last_q_table_dict:
-                    if last_q_table_dict["meta"]["algorithm"] == ALGORITHM and\
+                    if last_q_table_dict["meta"]["algorithm"] == ALGORITHM and \
                             last_q_table_dict["meta"]["feature"] == self.feature and \
                             last_q_table_dict["meta"]["q_table_id"] == self.q_table_id:
-                        self.proper_filename = file
-                        break
+                        self.q_table_filename = file
 
-    if not self.proper_filename == '':
-        self.logger.info(f"Loading q_table from {self.proper_filename}")
+                        # Check n_table
+                        n_table_filename_try = self.q_table_filename.replace("q", "n", 1)
+                        with open(n_table_filename_try, "r") as n_table_file:
+                            last_n_table_dict = json.load(n_table_file)
+                            if "meta" in last_n_table_dict:
+                                if last_n_table_dict["meta"]["algorithm"] == ALGORITHM and \
+                                        last_n_table_dict["meta"]["feature"] == self.feature and \
+                                        last_n_table_dict["meta"]["q_table_id"] == self.q_table_id:
+                                    self.n_table_filename = n_table_filename_try
+                                    break
+                                else:
+                                    self.logger.warn(f"q_table {self.q_table_filename} found without corresponding n_table.")
+
+    if not (self.q_table_filename == '' or self.n_table_filename == ''):
+        self.logger.info(f"Loading q_table from {self.q_table_filename} and n_table from {self.n_table_filename}")
         del last_q_table_dict["meta"]
+        del last_n_table_dict["meta"]
         self.q_table = last_q_table_dict
+        self.n_table = last_n_table_dict
     else:
         if not self.train:
             self.logger.warn("Not training and no q_table found")
-        self.logger.info(f"No q_table*.json found, for feature {self.feature} and id {self.q_table_id}. Empty one is used")
-        self.proper_filename = f'q_table_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
+        self.logger.info(f"No q_table*.json <-> n_table*.json pair found, for feature {self.feature} and id {self.q_table_id}. Empty one is used")
+        date_time_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.q_table_filename = f'q_table_{date_time_str}.json'
+        self.n_table_filename = f'n_table_{date_time_str}.json'
 
    # Action layout for symmetry transformations
     self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
@@ -107,14 +133,7 @@ def act(self, game_state: dict) -> str:
     check_state_exist_and_add(self, state_str)
 
     # action selection
-    if random.random() > self.epsilon:
-        # choose best action
-        q_values_of_state = self.q_table[state_str]
-        # some actions may have the same value, randomly choose one of these actions
-        action = random.choice([idx for idx, val in enumerate(q_values_of_state) if val == max(q_values_of_state)])
-    else:
-        # choose random action
-        action = random.choice(self.actions)
+    action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
 
     # Transform action
     if transform is not None:
@@ -130,9 +149,9 @@ def act(self, game_state: dict) -> str:
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
-        # append new state to q table
-        to_append = [0] * len(self.actions)
+        # append new state to tables
         self.q_table[state_str] = [0] * len(self.actions)
+        self.n_table[state_str] = [1] * len(self.actions)
 
 
 def check_state_exist_w_sym(self, state_str_list: list[str]):

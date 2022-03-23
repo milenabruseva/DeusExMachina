@@ -10,6 +10,7 @@ from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, actio
 from ..features import state_dict_to_feature_str
 from ..reward_sets import RewardGiver
 from ..custom_events import state_to_events
+from ..parameter_decay import AlphaDecayer
 
 
 def setup_training(self):
@@ -21,6 +22,7 @@ def setup_training(self):
     """
 
     # Setup rewards
+    self.learner = AlphaDecayer(self.learning_type, self.learning_param)
     self.reward_giver = RewardGiver(self.event_reward_set, self.dyn_rewards)
 
 
@@ -89,6 +91,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     check_state_exist_and_add(self, new_state_str)
 
+    # old state-action pair visited ++1
+    self.n_table[old_state_str][action] += 1
+
     q_old = self.q_table[old_state_str][action]
     q_update = reward + self.gamma * self.q_table[new_state_str][next_action]
     error = q_update - q_old
@@ -98,7 +103,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     # Q update and decay eligibility trace after update
     for state_str, trace in self.eligibility_trace.items():
-        self.q_table[state_str][trace[0]] += self.lr * error * trace[1]
+        self.q_table[state_str][trace[0]] += self.learner.alpha(self.n_table[state_str][trace[0]]) * error * trace[1]
         trace[1] *= self.gamma * self.lambda_
 
 
@@ -117,7 +122,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
 
     # Calculate custom events from states
-    events.extend(state_to_events(None, last_action, last_game_state))
+    events.extend(state_to_events(last_game_state, last_action, None))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
@@ -144,6 +149,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                     transformed_action_layout = transformed_action_layout.T
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
+    # old state-action pair visited ++1
+    self.n_table[old_state_str][action] += 1
+
     q_old = self.q_table[old_state_str][action]
     q_update = self.reward_giver.rewards_from_events(events) +\
              self.reward_giver.dynamic_rewards(last_game_state, last_action, None)
@@ -154,16 +162,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Q update
     for state_str, trace in self.eligibility_trace.items():
-        self.q_table[state_str][trace[0]] += self.lr * error * trace[1]
+        self.q_table[state_str][trace[0]] += self.learner.alpha(self.n_table[state_str][trace[0]]) * error * trace[1]
 
     # Reset eligibility trace
     self.eligibility_trace = {}
 
     # Store the q_table as json every 100 rounds
     if (last_game_state["round"] % self.save_n_rounds) == 0:
-        with open(self.proper_filename, "w") as q_table_file:
+        with open(self.q_table_filename, "w") as q_table_file, open(self.n_table_filename, "w") as n_table_file:
             q_table = self.q_table
+            n_table = self.n_table
             q_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
+            n_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
             json.dump(q_table, q_table_file, indent=4, sort_keys=True)
-
+            json.dump(n_table, n_table_file, indent=4, sort_keys=True)
 

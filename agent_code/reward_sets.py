@@ -85,8 +85,9 @@ class RewardGiver:
         """
         reward_sum = 0
 
-        if "coin_dist" in self.dynamic_reward_set:
-            reward_sum += nearest_coin_distance(new_game_state)
+        if new_game_state is not None: # Last step
+            if "coin_dist" in self.dynamic_reward_set:
+                reward_sum += nearest_coin_distance(new_game_state)
 
 
         return reward_sum

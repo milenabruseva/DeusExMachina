@@ -14,15 +14,15 @@ class CustomEvents:
 def state_to_events(old_game_state: dict, action_taken: str, new_game_state: dict) -> List[str]:
     custom_events = []
 
-    if old_game_state is None:
+    if new_game_state is None:
         # End of round
         won = True
-        my_score = new_game_state["self"][1]
-        tot_enemy_score = sum([enemy[1] for enemy in new_game_state["others"]])
+        my_score = old_game_state["self"][1]
+        tot_enemy_score = sum([enemy[1] for enemy in old_game_state["others"]])
         points_left = (3 * 5 + 9 * 1) - (my_score + tot_enemy_score)
 
         # Check if probably won
-        for enemy in new_game_state["others"]:
+        for enemy in old_game_state["others"]:
             if my_score < enemy[1] + points_left:
                 won = False
                 break

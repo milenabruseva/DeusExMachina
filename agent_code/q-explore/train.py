@@ -112,7 +112,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
 
     # Calculate custom events from states
-    events.extend(state_to_events(None, last_action, last_game_state))
+    events.extend(state_to_events(last_game_state, last_action, None))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
