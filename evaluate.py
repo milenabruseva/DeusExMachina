@@ -5,10 +5,11 @@ import main
 import glob, os
 import statistics
 
-generations = 5
-training_rounds = 10000
-evaluation_rounds = 10
-agent = 'q-learning'
+generations = 10
+training_rounds = 100
+evaluation_rounds = 1
+agent = 'sarsa-lambda'
+scenario = 'coin-heaven'
 opponents = ['rule_based_agent', 'rule_based_agent', 'rule_based_agent']
 date_format = "%Y-%m-%d %H-%M-%S"
 
@@ -26,10 +27,10 @@ y_diff = []
 for i in range(generations):
     start_time = datetime.now()
     main.main(['play', '--agents', agent, opponents[0],
-                opponents[1], opponents[2], '--train', '1', '--scenario', 'classic', '--n-rounds', str(training_rounds),
+                opponents[1], opponents[2], '--train', '1', '--scenario', scenario, '--n-rounds', str(training_rounds),
                 '--no-gui'])
     main.main(['play', '--save-stats', '--agents', agent, opponents[0],
-                opponents[1], opponents[2], '--scenario', 'classic', '--n-rounds', str(evaluation_rounds),
+                opponents[1], opponents[2], '--scenario', scenario, '--n-rounds', str(evaluation_rounds),
                 '--no-gui'])
     os.chdir("./results")
     y_invalid_tmp = []
@@ -46,9 +47,13 @@ for i in range(generations):
             results = json.load(open(file, 'r'))
             results_agent = results["by_agent"][agent]
             score_agent = results_agent["score"]
-            y_invalid_tmp.append(results_agent["invalid"])
+
             y_score_tmp.append(score_agent)
             y_time_tmp.append(results_agent["time"])
+            if "invalid" in results_agent:
+                y_invalid_tmp.append(results_agent["invalid"])
+            else:
+                y_invalid_tmp.append(0.0)
             if "suicides" in results_agent:
                 y_suicides_tmp.append(results_agent["suicides"])
             else:

@@ -7,7 +7,7 @@ import settings as s
 
 from .callbacks import ALGORITHM
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str
+from ..features import state_dict_to_feature_str, coin_difference
 from ..reward_sets import RewardGiver
 from ..custom_events import state_to_events
 
@@ -51,6 +51,13 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     # Transform state to all equivalent strings and action to index
+    if self.feature == "PreviousWinner":
+        old_game_state["remaining_coins"] = self.remaining_coins
+        coin_diff, killed_opponents_scores = coin_difference(old_game_state, new_game_state)
+        self.remaining_coins -= coin_diff
+        self.killed_opponents_scores.extend(killed_opponents_scores)
+        new_game_state["remaining_coins"] = self.remaining_coins
+
     old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
     new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 

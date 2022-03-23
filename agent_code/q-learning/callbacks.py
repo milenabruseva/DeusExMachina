@@ -23,6 +23,8 @@ def setup(self):
     """
     self.ACTIONS = ACTIONS
     self.actions = range(len(ACTIONS))
+    self.remaining_coins = 9
+    self.killed_opponents_scores = []
     with open("q-learning-params.json") as params_file:
         self.logger.info("Loading q-learning parameters from json file")
 

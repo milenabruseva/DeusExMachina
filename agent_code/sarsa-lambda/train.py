@@ -7,7 +7,7 @@ import settings as s
 
 from .callbacks import ALGORITHM
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str
+from ..features import state_dict_to_feature_str, coin_difference
 from ..reward_sets import RewardGiver
 from ..custom_events import state_to_events
 from ..parameter_decay import AlphaDecayer
@@ -70,6 +70,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Calculate rewards
     reward = self.reward_giver.rewards_from_events(events) +\
              self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
+
+    print(f"Reward {reward}")
 
     # Update Q-Value
     # Symmetry check
@@ -136,6 +138,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     # Transform state to string and action to index
+    last_game_state["remaining_coins"] = self.remaining_coins
     old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
     action = self.ACTIONS.index(last_action)
 

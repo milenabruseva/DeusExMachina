@@ -6,7 +6,7 @@ import numpy as np
 
 import random
 
-from ..features import state_dict_to_feature_str
+from ..features import state_dict_to_feature_str, coin_difference
 from ..parameter_decay import Explorer
 
 ALGORITHM = 'sarsa-lambda'
@@ -24,6 +24,9 @@ def setup(self):
     """
     self.ACTIONS = ACTIONS
     self.actions = range(len(ACTIONS))
+    self.remaining_coins = 9
+    self.killed_opponents_scores = []
+    self.prev_game_state = None
     with open("sarsa-lambda-params.json") as params_file:
         self.logger.info("Loading sarsa-lambda parameters from json file")
 
@@ -113,6 +116,15 @@ def act(self, game_state: dict) -> str:
     #print(state.vision.T)
     #print(state.explosion_map.T)
     #print("-----------------------")
+
+    if self.feature == "PreviousWinner":
+        if self.prev_game_state is not None:
+            self.prev_game_state["remaining_coins"] = self.remaining_coins
+        coin_diff, killed_opponents_scores = coin_difference(self.prev_game_state, game_state)
+        self.remaining_coins -= coin_diff
+        self.killed_opponents_scores.extend(killed_opponents_scores)
+        game_state["remaining_coins"] = self.remaining_coins
+        self.prev_game_state = game_state
 
     state_str = state_dict_to_feature_str(game_state, self.feature)
 

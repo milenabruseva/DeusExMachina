@@ -38,6 +38,8 @@ def state_dict_to_feature_str(state_dict, feature_type):
         return str(LocalVision(state_dict))
     elif feature_type == "RollingWindow":
         return RollingWindow(state_dict).get_all_sym_str()
+    elif feature_type == "PreviousWinner":
+        return PreviousWinner(state_dict).get_all_sym_str()
     else:
         return None
 
