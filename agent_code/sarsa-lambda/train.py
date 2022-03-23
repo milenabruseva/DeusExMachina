@@ -51,8 +51,16 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     events.extend(state_to_events(old_game_state, self_action, new_game_state))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     # Transform state to all equivalent strings and action to index
+    if self.feature == "PreviousWinner":
+        old_game_state["remaining_coins"] = self.remaining_coins
+        coin_diff, killed_opponents_scores = coin_difference(old_game_state, new_game_state)
+        self.remaining_coins -= coin_diff
+        self.killed_opponents_scores.extend(killed_opponents_scores)
+        new_game_state["remaining_coins"] = self.remaining_coins
+
     old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
     new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 
@@ -66,8 +74,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Update Q-Value
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature != "RollingWindow":
-            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+            self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None:
             # Just use the first entry w/o transform
@@ -125,6 +133,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     events.extend(state_to_events(last_game_state, last_action, None))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     # Transform state to string and action to index
     old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
@@ -133,8 +142,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Update Q-Value
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature != "RollingWindow":
-            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+            self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None:
             # Just use the first entry w/o transform

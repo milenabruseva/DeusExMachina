@@ -45,8 +45,29 @@ def epsilon_greedy(epsilon, available_actions, q_value, counts):
 
     return action
 
+def epsilon_decay(epsilon, available_actions, q_value, counts):
+    eps = 1/(sum(counts) - len(available_actions) + 1)
+    if random.random() > eps:
+        # some actions may have the same value, randomly choose one of these actions
+        action = random.choice([idx for idx, val in enumerate(q_value) if val == max(q_value)])
+    else:
+        # choose random action
+        action = random.choice(available_actions)
 
-explore_function_dict = {"e_greedy": epsilon_greedy}
+    return action
+
+
+def explore_function_standard(factor, available_actions, q_value, counts):
+    values = []
+    for i in range(6):
+        values.append(q_value[i] + factor / counts[i])
+    return random.choice([idx for idx, val in enumerate(values) if val == max(values)])
+
+
+
+explore_function_dict = {"e_greedy": epsilon_greedy,
+                         "e_decay": epsilon_decay,
+                         "explore_standard": explore_function_standard}
 
 
 
@@ -58,8 +79,8 @@ def alpha_const(visit_count: int, value):
 def alpha_over_n(visit_count: int, value):
     return value / visit_count
 
-def alpha_ln(visit_count: int):
-    return math.log(visit_count + 1) / visit_count
+def alpha_ln(visit_count: int, value):
+    return value * math.log(visit_count + 1) / visit_count
 
 # Alpha Decay Dictionary
 alpha_decay_function_dict = {"const": alpha_const,

@@ -24,6 +24,18 @@ game_rewards_no_1 = {
     ce.PROBABLY_LOST: -100
 }
 
+coin_heaven = {
+    e.COIN_COLLECTED: 100,
+    e.GOT_KILLED: -500,
+    e.KILLED_SELF: -500,
+    e.BOMB_DROPPED: -50,
+    e.INVALID_ACTION: -50,
+    e.WAITED: -50,
+    ce.DECREASED_NEAREST_COIN_DIST: 10,
+    ce.INCREASED_NEAREST_COIN_DIST: -20,
+    ce.SAME_NEAREST_COIN_DIST: -1
+}
+
 # Dynamic Reward Functions
 
 def nearest_coin_distance(game_state: dict):
@@ -45,7 +57,8 @@ def nearest_coin_distance(game_state: dict):
 
 ### string to reward set dict
 
-reward_set_strings = {"no_1": game_rewards_no_1}
+reward_set_strings = {"no_1": game_rewards_no_1,
+                      "coin_focus": coin_heaven}
 
 dynamic_rewards_strings = {"coin_dist": nearest_coin_distance}
 
