@@ -32,7 +32,7 @@ def state_to_events(old_game_state: dict, action_taken: str, new_game_state: dic
         else:
             custom_events.append(CustomEvents.PROBABLY_LOST)
 
-    else:
+    elif old_game_state is not None:
         # Additional custom events if not End of Round
 
         # Coin distance calculation

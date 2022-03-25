@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import main
 import glob, os
 
-generations = 10
-training_rounds = 100
-evaluation_rounds = 10
+generations = 1
+training_rounds = 10
+evaluation_rounds = 1
 agent = 'q-learning'
 scenario = 'classic'
 opponents = ['rule_based_agent', 'rule_based_agent', 'rule_based_agent']
