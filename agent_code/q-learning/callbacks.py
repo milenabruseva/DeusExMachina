@@ -191,6 +191,9 @@ def act(self, game_state: dict) -> str:
     else:
         action = ACTIONS.index(self.piggy.carry(game_state))
 
+    if (self.remaining_coins_new == 0) and (np.count_nonzero(game_state["field"] == 1) == 0) and (len(game_state["others"]) <= 1):
+        action = ACTIONS.index("BOMB")
+
     # Transform action
     if self.explorer_type != "piggyback" and transform is not None:
         if not (action >= 4):  # wait or bomb
@@ -222,7 +225,6 @@ def act(self, game_state: dict) -> str:
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
-        print(state_str)
         # append new state to tables
         if self.feature in ["PreviousWinnerCD"] and False:
             self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]

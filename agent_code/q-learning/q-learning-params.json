@@ -1,7 +1,7 @@
 {
   "reward_decay": 0.9,
   "explorer": "piggyback",
-  "exp_param": 0.0,
+  "exp_param": 0.02,
   "piggy_name": "agent_n",
 
   "update_type": "q_max",
