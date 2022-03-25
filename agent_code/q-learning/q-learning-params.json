@@ -1,9 +1,10 @@
 {
   "reward_decay": 0.9,
-  "explorer": "best",
+  "explorer": "piggyback",
   "exp_param": 0.0,
+  "piggy_name": "agent_n",
 
-  "update_type": "k_over_n",
+  "update_type": "q_max",
   "update_param": 10,
 
   "learning_type": "ln/n",
@@ -15,5 +16,5 @@
   "dyn_rewards": [],
 
   "feature": "PreviousWinnerCD",
-  "q_table_id": "3_strong_rule_based_classic_first_try"
+  "q_table_id": "3_strong_rule_based_classic_piggy_agent_n"
 }

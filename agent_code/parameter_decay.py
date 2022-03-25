@@ -1,9 +1,13 @@
 import math
 import random
+import importlib
+from types import SimpleNamespace
+
+
 
 # Explorer Class
 class Explorer:
-    __slots__ = ("exp_str", "exp_param")
+    __slots__ = ("exp_str", "exp_param", "piggy")
     exp_str : str
     exp_param : float
 
@@ -16,9 +20,41 @@ class Explorer:
         return explore_function_dict[self.exp_str](self.exp_param, available_actions, q_values, counts)
 
 
+
+# Piggyback Class
+class PiggyCarry:
+    #__slots__ = ("piggy", "piggy_name", "epsilon", "callbacks", "agent")
+    piggy_name : str
+    epsilon : float
+
+    def __init__(self, logger, agent_name, epsilon):
+        self.piggy_name = agent_name
+        self.epsilon = epsilon
+
+        self.piggy = SimpleNamespace()
+        self.piggy.train = False
+        self.piggy.logger = logger
+
+        self.callbacks = importlib.import_module('agent_code.' + agent_name + '.callbacks')
+        self.callbacks.setup(self.piggy)
+
+
+
+    def carry(self, game_state: dict):
+        if random.random() > self.epsilon:
+            # some actions may have the same value, randomly choose one of these actions
+            action = self.callbacks.act(self.piggy, game_state)
+        else:
+            # choose random action
+            action = random.choice(['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB'])
+
+        return action
+
+
+
 # Exploration Update Function
 class QUpdater:
-    __slots__ = ("upd_str", "upd_param")
+    __slots__ = ("upd_str", "upd_param", "piggy")
     upd_str: str
     upd_param: float
 
@@ -123,3 +159,4 @@ def alpha_ln(visit_count: int, value):
 alpha_decay_function_dict = {"const": alpha_const,
                              "1/n": alpha_over_n,
                              "ln/n": alpha_ln}
+

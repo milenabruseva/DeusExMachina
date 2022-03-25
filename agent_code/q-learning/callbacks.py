@@ -5,7 +5,7 @@ import json
 import numpy as np
 
 from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from ..parameter_decay import Explorer
+from ..parameter_decay import Explorer, PiggyCarry
 
 from ..features import PreviousWinnerCD
 
@@ -32,7 +32,8 @@ def setup(self):
 
         self.gamma = params["reward_decay"]
         self.explorer_type = params["explorer"]
-        self.upd_param = params["exp_param"]
+        self.exp_param = params["exp_param"]
+        self.exp_name = params["piggy_name"]
 
         self.upd_type = params["update_type"]
         self.upd_param = params["update_param"]
@@ -49,7 +50,10 @@ def setup(self):
         self.q_table_id = params["q_table_id"]
     self.q_table = {}
     self.n_table = {}
-    self.explorer = Explorer(self.explorer_type, self.upd_param)
+    if self.explorer_type != "piggyback":
+        self.explorer = Explorer(self.explorer_type, self.exp_param)
+    else:
+        self.piggy = PiggyCarry(self.logger, self.exp_name, self.exp_param)
 
     # Check for q/n_table and load q_table from json
     q_table_filenames = glob.glob('q_table*.json')
@@ -125,6 +129,8 @@ def act(self, game_state: dict) -> str:
     #print(state.explosion_map.T)
     #print("-----------------------")
 
+    pure_game_state = game_state
+
     # Reset at game start:
     if game_state["step"] == 1:
         self.prev_game_state_str = None
@@ -166,7 +172,7 @@ def act(self, game_state: dict) -> str:
     # Symmetry check
     transform = None
     if type(state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
             self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
         state_idx = check_state_exist_w_sym(self, state_str[0])
         if state_idx is None or state_str[1][0] is None:
@@ -180,10 +186,13 @@ def act(self, game_state: dict) -> str:
     check_state_exist_and_add(self, state_str)
 
     # action selection
-    action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+    if self.explorer_type != "piggyback":
+        action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+    else:
+        action = ACTIONS.index(self.piggy.carry(game_state))
 
     # Transform action
-    if transform is not None:
+    if self.explorer_type != "piggyback" and transform is not None:
         if not (action >= 4):  # wait or bomb
             transformed_action_layout = self.action_layout
             if transform[1]:
@@ -215,27 +224,30 @@ def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
         print(state_str)
         # append new state to tables
-        self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
-        for i in range(4):
-            if state_str[i] == "1" :
-                self.q_table[state_str][i] = 10
-            elif state_str[i] == "2":
-                self.q_table[state_str][i] = 0
-        if state_str[5] in ["0", "1", "2"]:
-            if state_str[:4].count("2") == 2 and ((state_str[:4].count("22") == 1) or (state_str[0] == "2" and state_str[3] == "2")):
-                self.q_table[state_str][5] = -10
-            else:
-                if state_str[4] == "0":
-                    pass
-                elif state_str[4] == "1":
-                    self.q_table[state_str][5] = 10
-                elif state_str[4] == "2":
-                    self.q_table[state_str][5] = 15
-                elif state_str[4] == "3":
-                    self.q_table[state_str][5] = 20
-                elif state_str[4] == "4":
-                    self.q_table[state_str][4] = -10
+        if self.feature in ["PreviousWinnerCD"] and False:
+            self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
+            for i in range(4):
+                if state_str[i] == "1" :
+                    self.q_table[state_str][i] = 10
+                elif state_str[i] == "2":
+                    self.q_table[state_str][i] = 0
+            if state_str[5] in ["0", "1", "2"]:
+                if state_str[:4].count("2") == 2 and ((state_str[:4].count("22") == 1) or (state_str[0] == "2" and state_str[3] == "2")):
                     self.q_table[state_str][5] = -10
+                else:
+                    if state_str[4] == "0":
+                        pass
+                    elif state_str[4] == "1":
+                        self.q_table[state_str][5] = 10
+                    elif state_str[4] == "2":
+                        self.q_table[state_str][5] = 15
+                    elif state_str[4] == "3":
+                        self.q_table[state_str][5] = 20
+                    elif state_str[4] == "4":
+                        self.q_table[state_str][4] = -10
+                        self.q_table[state_str][5] = -10
+        else:
+            self.q_table[state_str] = [0] * len(self.actions)
 
         self.n_table[state_str] = [1] * len(self.actions)
 
