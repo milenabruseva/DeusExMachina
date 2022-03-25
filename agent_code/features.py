@@ -453,7 +453,8 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
 
                 for idx in still_empty_idxs:
                     crates = np.argwhere(arena == 1)
-                    crate_dist = nearest_entity_distance(coords[idx], crates)
+                    #crates = tuple(map(tuple, crates))
+                    crate_dist, _ = nearest_entity_distance(coords[idx], crates)
                     if crate_dist < nearest_crate_distance:
                         nearest_crate_distance = crate_dist
                         nearest_crate_distance_idx.clear()
@@ -521,7 +522,7 @@ def get_mode(visible_coins, coins_remaining, num_opps_left):
         elif coins_remaining > 0:  # if no. visible coins is 0
             return 1  # bombing/crate destroying mode
         else:
-            print(f"Visible Coins: {visible_coins}. Coins remaining: {coins_remaining}. Opponents left: {num_opps_left}")
+            #print(f"Visible Coins: {visible_coins}. Coins remaining: {coins_remaining}. Opponents left: {num_opps_left}")
             return None
 
 
@@ -650,9 +651,9 @@ class PreviousWinner(Features):
         # game mode
         self.features.append(game_mode)
 
-        print(np.array([[0, self.features[0], 0],
-                        [self.features[3], self.features[4], self.features[1]],
-                        [0, self.features[2], self.features[5]]]))
+        # print(np.array([[0, self.features[0], 0],
+        #                 [self.features[3], self.features[4], self.features[1]],
+        #                 [0, self.features[2], self.features[5]]]))
 
     def __repr__(self):
         return ''.join(str(e) for e in self.features)

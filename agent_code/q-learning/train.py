@@ -102,6 +102,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
                     transformed_action_layout = transformed_action_layout.T
                 action = action_layout_to_action(self, transformed_action_layout, action)
         new_idx = check_state_exist_w_sym(self, new_state_str[0])
+
         if new_idx is None:
             # Just use the first entry w/o transform
             new_state_str = new_state_str[0][0]
@@ -110,13 +111,20 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
             new_state_transform = new_state_str[1][new_idx]
             new_state_str = new_state_str[0][new_idx]
     check_state_exist_and_add(self, new_state_str)
+    #check_state_exist_and_add(self, old_state_str)
 
     # old state-action pair visited ++1
     try:
         self.n_table[old_state_str][action] += 1
     except KeyError:
-        print(debug_old_state_str[0])
-        print(self.q_table.keys())
+        print({old_state_str not in self.n_table.keys()})
+        print({old_state_str not in self.q_table.keys()})
+        print(old_game_state)
+        print(self.prev_game_state)
+        print("------------------------")
+        print(old_state_str)
+        print(debug_old_state_str)
+        print(state_dict_to_feature_str(self.prev_game_state, self.feature))
         raise
 
     ### Calculate rewards
@@ -151,7 +159,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
 
     ### Calculate custom events from states
-    events.extend(state_to_events(last_game_state, last_action, None))
+    events.extend(state_to_events(self.prev_game_state, last_action, last_game_state))
+
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
@@ -159,11 +168,25 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     ### Store unrecoverable game state information
     if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
         # Old game state of training is (new) game_state of act
-        last_game_state["remaining_coins"] = self.remaining_coins_new
-        last_game_state["own_bomb"] = self.own_bomb_new
+        self.prev_game_state["remaining_coins"] = self.remaining_coins_new
+        self.prev_game_state["own_bomb"] = self.own_bomb_new
+        coin_diff, _ = store_unrecoverable_infos_helper(self.prev_game_state, last_game_state)
+
+        remaining_coins_new = self.remaining_coins_new - coin_diff
+        own_bomb_new = self.own_bomb_new
+        if own_bomb_new is None:
+            if last_game_state["self"][3] in [bomb[0] for bomb in last_game_state["bombs"]]:
+                own_bomb_new = last_game_state["self"][3]
+        else:
+            if own_bomb_new not in [bomb[0] for bomb in last_game_state["bombs"]]:
+                own_bomb_new = None
+
+        last_game_state["remaining_coins"] = remaining_coins_new
+        last_game_state["own_bomb"] = own_bomb_new
 
     ### Transform state to string and action to index
-    old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
+    old_state_str = self.prev_game_state_str
+    #old_state_str = state_dict_to_feature_str(self.prev_game_state, self.feature)
     action = self.ACTIONS.index(last_action)
 
     # Symmetry check
@@ -185,12 +208,21 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
     # old state-action pair visited ++1
-    self.n_table[old_state_str][action] += 1
+    #check_state_exist_and_add(self, old_state_str)
+    try:
+        self.n_table[old_state_str][action] += 1
+    except KeyError:
+        print("\nNo")
+        print({old_state_str not in self.n_table.keys()})
+        print({old_state_str not in self.q_table.keys()})
+        print(old_state_str)
+        print(state_dict_to_feature_str(self.prev_game_state, self.feature))
+        raise
 
     ### Update Q-Value
     q_old = self.q_table[old_state_str][action]
     q_update = self.reward_giver.rewards_from_events(events) +\
-             self.reward_giver.dynamic_rewards(last_game_state, last_action, None)
+             self.reward_giver.dynamic_rewards(self.prev_game_state, last_action, last_game_state)
     self.q_table[old_state_str][action] += self.learner.alpha(self.n_table[old_state_str][action]) * (q_update - q_old)
 
     if not self.train_fast:

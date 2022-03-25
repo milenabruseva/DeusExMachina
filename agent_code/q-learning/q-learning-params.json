@@ -7,8 +7,8 @@
   "update_param": 10,
 
   "learning_type": "ln/n",
-  "learning_param": 1,
-  "save_n_rounds": 1,
+  "learning_param": 1.5,
+  "save_n_rounds": 10,
   "train_fast": false,
 
   "event_reward_set": "classic",

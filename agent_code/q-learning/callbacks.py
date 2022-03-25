@@ -213,6 +213,7 @@ def act(self, game_state: dict) -> str:
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
+        print(state_str)
         # append new state to tables
         self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
         for i in range(4):
