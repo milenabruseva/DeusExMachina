@@ -337,8 +337,71 @@ def safe_death(coord, blast_coords, game_mode):
         return True
     return False
 
-def certain_death_in_n_steps(coord, arena, bombs, blast_coords, blast_countdowns, explosions, enemy_locations, n=4):
+def certain_death_in_n_steps(coord, arena, player_pos, bombs, blast_coords, blast_countdowns, explosions, enemy_locations, n=4):
     pass
+
+def safe_to_bomb(player_pos, arena, has_bomb, deadly_coords):
+    if has_bomb:
+        safe_left = True
+        safe_right = True
+        safe_up = True
+        safe_down = True
+        x, y = player_pos
+        for i in range(1, 4):
+            if 0 <= x + i <= 16 and 0 <= y <= 16:
+                if arena[(x+i, y)] != 0 or (x+i, y) in deadly_coords:
+                    safe_right = False
+            if 0 <= x - i <= 16 and 0 <= y <= 16:
+                if arena[(x-i, y)] != 0 or (x-i, y) in deadly_coords:
+                    safe_left = False
+            if 0 <= x <= 16 and 0 <= y + i <= 16:
+                if arena[(x, y+i)] != 0 or (x, y+i) in deadly_coords:
+                    safe_up = False
+            if 0 <= x <= 16 and 0 <= y - i <= 16:
+                if arena[(x, y - i)] != 0 or (x, y-i) in deadly_coords:
+                    safe_down = False
+
+        if safe_left or safe_right or safe_down or safe_up:
+            return True
+
+        if not safe_right:
+            for i in range(1, 3):
+                if 0 <= x + i <= 16:
+                    if 0 <= y + 1 <= 16:
+                        if arena[(x + i, y + 1)] == 0 and (x + i, y + 1) not in deadly_coords:
+                            return True
+                    if 0 <= y - 1 <= 16:
+                        if arena[(x + i, y - 1)] == 0 and (x + i, y - 1) not in deadly_coords:
+                            return True
+        if not safe_left:
+            for i in range(1, 3):
+                if 0 <= x - i <= 16:
+                    if 0 <= y + 1 <= 16:
+                        if arena[(x - i, y + 1)] == 0 and (x - i, y + 1) not in deadly_coords:
+                            return True
+                    if 0 <= y - 1 <= 16:
+                        if arena[(x - i, y - 1)] == 0 and (x - i, y - 1) not in deadly_coords:
+                            return True
+        if not safe_up:
+            for i in range(1, 3):
+                if 0 <= y + i <= 16:
+                    if 0 <= x + 1 <= 16:
+                        if arena[(x + 1, y + i)] == 0 and (x + 1, y + i) not in deadly_coords:
+                            return True
+                    if 0 <= x - 1 <= 16:
+                        if arena[(x - 1, y + i)] == 0 and (x - 1, y + i) not in deadly_coords:
+                            return True
+        if not safe_down:
+            for i in range(1, 3):
+                if 0 <= y - i <= 16:
+                    if 0 <= x + 1 <= 16:
+                        if arena[(x + 1, y - i)] == 0 and (x + 1, y - i) not in deadly_coords:
+                            return True
+                    if 0 <= x - 1 <= 16:
+                        if arena[(x - 1, y - i)] == 0 and (x - 1, y - i) not in deadly_coords:
+                            return True
+        return False
+    return False
 
 def possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, blast_to_bomb, enemy_locations):
     nearest_enemy_distance, nearest_enemy = nearest_entity_distance(coord, enemy_locations)
@@ -746,7 +809,9 @@ class PreviousWinnerCD(Features):
             get_neighboring_tile_infos(player_pos, neighboring_tiles, coins, bombs, arena, enemy_locations, game_mode,
                                           enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns, blast_to_bomb)
         # information on current field
-        self.features[4] = get_current_tile_info(player_pos, game_state["self"][2], bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations)  # tile self
+        can_bomb = safe_to_bomb(player_pos, arena, game_state["self"][2], deadly_coords)
+
+        self.features[4] = get_current_tile_info(player_pos, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations)  # tile self
 
         # game mode
         self.features[5] = game_mode
