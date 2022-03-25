@@ -6,8 +6,10 @@ import numpy as np
 
 import random
 
-from ..features import state_dict_to_feature_str, coin_difference
+from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
 from ..parameter_decay import Explorer
+
+from ..features import PreviousWinnerCD
 
 ALGORITHM = 'sarsa-lambda'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -24,9 +26,7 @@ def setup(self):
     """
     self.ACTIONS = ACTIONS
     self.actions = range(len(ACTIONS))
-    self.remaining_coins = 9
-    self.killed_opponents_scores = []
-    self.prev_game_state = None
+
     with open("sarsa-lambda-params.json") as params_file:
         self.logger.info("Loading sarsa-lambda parameters from json file")
 
@@ -34,7 +34,7 @@ def setup(self):
 
         self.gamma = params["reward_decay"]
         self.explorer_type = params["explorer"]
-        self.exp_param = params["exp_param"]
+        self.upd_param = params["exp_param"]
 
         self.learning_type = params["learning_type"]
         self.learning_param = params["learning_param"]
@@ -49,7 +49,7 @@ def setup(self):
         self.q_table_id = params["q_table_id"]
     self.q_table = {}
     self.n_table = {}
-    self.explorer = Explorer(self.explorer_type, self.exp_param)
+    self.explorer = Explorer(self.explorer_type, self.upd_param)
 
     # Check for q/n_table and load q_table from json
     q_table_filenames = glob.glob('q_table*.json')
@@ -101,6 +101,16 @@ def setup(self):
     # Instantiate Eligibility Trace (dict of array with array[0] the action, array[1] the trace)
     self.eligibility_trace = {}
 
+    # Long/Short Term Memory
+    self.prev_game_state = None
+    self.remaining_coins_old = 9
+    self.remaining_coins_new = 9
+    self.killed_opponents_scores = {}
+    self.own_bomb_old = None
+    self.own_bomb_new = None
+
+    self.can_act = True
+
 
 def act(self, game_state: dict) -> str:
     """
@@ -117,14 +127,27 @@ def act(self, game_state: dict) -> str:
     #print(state.explosion_map.T)
     #print("-----------------------")
 
-    if self.feature == "PreviousWinner":
+    # Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
         if self.prev_game_state is not None:
-            self.prev_game_state["remaining_coins"] = self.remaining_coins
-        coin_diff, killed_opponents_scores = coin_difference(self.prev_game_state, game_state)
-        self.remaining_coins -= coin_diff
-        self.killed_opponents_scores.extend(killed_opponents_scores)
-        game_state["remaining_coins"] = self.remaining_coins
+            self.remaining_coins_old = self.remaining_coins_new
+            self.own_bomb_old = self.own_bomb_new
+
+            coin_diff, killed_opponents_w_scores = store_unrecoverable_infos_helper(self.prev_game_state, game_state)
+
+            self.remaining_coins_new -= coin_diff
+            self.killed_opponents_scores.update(killed_opponents_w_scores)
+            if self.own_bomb_old is None:
+                if game_state["self"][3] in [bomb[0] for bomb in game_state["bombs"]]:
+                    self.own_bomb_new = game_state["self"][3]
+            else:
+                if self.own_bomb_old not in [bomb[0] for bomb in game_state["bombs"]]:
+                    self.own_bomb_new = None
+
         self.prev_game_state = game_state
+        game_state["remaining_coins"] = self.remaining_coins_new
+        game_state["own_bomb"] = self.own_bomb_new
+
 
     state_str = state_dict_to_feature_str(game_state, self.feature)
 
@@ -145,7 +168,11 @@ def act(self, game_state: dict) -> str:
     check_state_exist_and_add(self, state_str)
 
     # action selection
-    action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+    if self.train and (self.next_action is not None) and (not self.can_act):
+        action = self.next_action
+    else:
+        action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+        #PreviousWinnerCD(game_state).print_me()
 
     # Transform action
     if transform is not None:

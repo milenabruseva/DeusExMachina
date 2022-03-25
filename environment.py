@@ -239,6 +239,7 @@ class GenericWorld:
     def evaluate_explosions(self):
         # Explosions
         agents_hit = set()
+        agents_self_hit = set()
         for explosion in self.explosions:
             # Kill agents
             if explosion.is_dangerous():
@@ -248,6 +249,7 @@ class GenericWorld:
                         # Note who killed whom, adjust scores
                         if a is explosion.owner:
                             self.logger.info(f'Agent <{a.name}> blown up by own bomb')
+                            agents_self_hit.add(a)
                             a.add_event(e.KILLED_SELF)
                             explosion.owner.trophies.append(Trophy.suicide_trophy)
                         else:
@@ -261,7 +263,8 @@ class GenericWorld:
         for a in agents_hit:
             a.dead = True
             self.active_agents.remove(a)
-            a.add_event(e.GOT_KILLED)
+            if a not in agents_self_hit:
+                a.add_event(e.GOT_KILLED)
             for aa in self.active_agents:
                 if aa is not a:
                     aa.add_event(e.OPPONENT_ELIMINATED)

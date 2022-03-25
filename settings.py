@@ -56,10 +56,10 @@ INPUT_MAP = {
 }
 
 # Logging levels
-LOG_GAME = logging.INFO # default: logging.INFO
-LOG_AGENT_WRAPPER = logging.INFO # default: logging.INFO
-LOG_AGENT_CODE = logging.DEBUG # default: logging.DEBUG
-# LOG_GAME = logging.WARN # default: logging.INFO
-# LOG_AGENT_WRAPPER = logging.WARN # default: logging.INFO
-# LOG_AGENT_CODE = logging.WARN # default: logging.DEBUG
+# LOG_GAME = logging.INFO # default: logging.INFO
+# LOG_AGENT_WRAPPER = logging.INFO # default: logging.INFO
+# LOG_AGENT_CODE = logging.DEBUG # default: logging.DEBUG
+LOG_GAME = logging.WARN # default: logging.INFO
+LOG_AGENT_WRAPPER = logging.WARN # default: logging.INFO
+LOG_AGENT_CODE = logging.WARN # default: logging.DEBUG
 LOG_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB

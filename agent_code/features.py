@@ -30,6 +30,8 @@ def state_dict_to_feature(state_dict, feature_type) -> Features:
         return RollingWindow(state_dict)
     elif feature_type == "PreviousWinner":
         return PreviousWinner(state_dict)
+    elif feature_type == "PreviousWinnerCD":
+        return PreviousWinnerCD(state_dict)
     else:
         return None
 
@@ -40,6 +42,8 @@ def state_dict_to_feature_str(state_dict, feature_type):
         return RollingWindow(state_dict).get_all_sym_str()
     elif feature_type == "PreviousWinner":
         return PreviousWinner(state_dict).get_all_sym_str()
+    elif feature_type == "PreviousWinnerCD":
+        return PreviousWinnerCD(state_dict).get_all_sym_str()
     else:
         return None
 
@@ -273,22 +277,39 @@ class RollingWindow(Features):
         return sym_str, transforms
 
 
+
 # Helper functions for previous year winner features
 def manhattan_distance(x1: tuple[int, int], x2: tuple[int, int]):
     return abs(x1[0] - x2[0]) + abs(x1[1] - x2[1])
+
+def places_reachable_from_coord(coord, arena, bombs, deadly, enemy_locations):
+    places_reachable = []
+    neighbors = get_neighbor_coords(coord)
+    for pos in neighbors:
+        if not ((arena[pos] in (1,-1)) or (pos in bombs) or (pos in deadly) or (pos in enemy_locations)):
+            places_reachable.append(pos)
+
+def update_deadly(blast_coords, blast_countdowns, explosions):
+    deadly_coords = []
+    for idx, coord in enumerate(blast_coords):
+        if blast_countdowns[idx] == 0:
+            deadly_coords.append(coord)
+    deadly_coords.extend(tuple(map(tuple, np.argwhere(explosions == 2))))
+
+    return deadly_coords
 
 
 # nearest entity
 def nearest_entity_distance(coord, entities):
     if len(entities):
         min_distance = 99
-        nearest_entity = (0, 0)
+        nearest_entity_pos = (0, 0)
         for entity_pos in entities:
             dist = manhattan_distance(coord, entity_pos)
             if dist < min_distance:
                 min_distance = dist
-                nearest_entity = entity_pos
-        return min_distance, nearest_entity
+                nearest_entity_pos = entity_pos
+        return min_distance, nearest_entity_pos
     else:
         return 0, coord
 
@@ -301,41 +322,50 @@ def get_neighbor_coords(coord):
     return [up, right, down, left]
 
 
-def surrounding_blowable_count(coord, arena, enemy_locations):
-    blowable_count = 0
-    if coord[0] != 0 and coord[0] != 16 and coord[1] != 0 and coord[1] != 16:
-        neighboring_tiles = get_neighbor_coords(coord)
-        for tile in neighboring_tiles:
-            if arena[tile] == 1 or tile in enemy_locations:  # if neighboring tile is crate or enemy agent
-                blowable_count += 1
+def surrounding_blow_count(coord, arena, enemy_locations):
+    blow_count = 0
 
-    return blowable_count
+    blast_coords = get_blast_coords(coord, arena)
+    for blast_coord in blast_coords:
+        if arena[blast_coord] == 1 or blast_coord in enemy_locations:
+            blow_count += 1
+
+    return blow_count
 
 def safe_death(coord, blast_coords, game_mode):
     if game_mode == 2 and coord not in blast_coords:
         return True
     return False
 
-def possibly_yields_danger(coord, nearest_enemy, arena):
+def certain_death_in_n_steps(coord, arena, bombs, blast_coords, blast_countdowns, explosions, enemy_locations, n=4):
+    pass
+
+def possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, blast_to_bomb, enemy_locations):
+    nearest_enemy_distance, nearest_enemy = nearest_entity_distance(coord, enemy_locations)
+
     #if distance to nearest enemy is less than 4, and moving there would put player agent in a corner
-    dist = manhattan_distance(coord, nearest_enemy)
-    if coord[0] != 0 and coord[0] != 16 and coord[1] != 0 and coord[1] != 16:
-        neighboring_tiles = get_neighbor_coords(coord)
-        surrounding_solids = 0
-        for tile in neighboring_tiles:
-            if arena[tile] == 1 or arena[tile] == -1:
-                surrounding_solids += 1
-        if dist < 4 and surrounding_solids >= 3:
+    neighboring_tiles = get_neighbor_coords(coord)
+    surrounding_solids = 0
+    for tile in neighboring_tiles:
+        if arena[tile] in (1, -1):
+            surrounding_solids += 1
+    if nearest_enemy_distance < 4 and surrounding_solids >= 3:
+        return True
+
+    # Running towards a bomb
+    if coord in blast_coords:
+        idx = blast_coords.index(coord)
+        bomb_pos = bombs[blast_to_bomb[idx]]
+        dist_to_bomb = manhattan_distance(coord, bomb_pos)
+        if (blast_countdowns[idx] - 1) - (3 - dist_to_bomb) <= 0:
             return True
+
     return False
 
 def get_neighboring_tile_info(coord, idx, coins, bombs, arena, enemy_locations, game_mode, nearest_tile_to_coin,
-                              nearest_tile_to_enemy, most_destructive_tile, yields_safe_death, is_dangerous):
-    if coord in bombs or arena[coord] == -1 or arena[coord] == 1 or coord in enemy_locations:  # if bomb/wall/crate/opponent on tile
-        return 2
+                              nearest_tile_to_enemy, most_destructive_tile, yields_certain_death, is_dangerous):
 
-    # if tile yields safe death
-    elif yields_safe_death[idx]:
+    if coord in bombs or arena[coord] == -1 or arena[coord] == 1 or coord in enemy_locations or yields_certain_death[idx]:  # if bomb/wall/crate/opponent/certainDeath on tile
         return 2
 
     elif is_dangerous[idx]: # if tile possibly yields danger, that is, its trapped on 3 sides with not enough time to escape
@@ -368,44 +398,145 @@ def get_neighboring_tile_info(coord, idx, coins, bombs, arena, enemy_locations, 
         return 0
 
 
-def get_current_tile_info(coord, bombs, blast_coords, game_mode, arena, enemy_locations):
-    # if bomb placement would not lead to own self death
-    if not safe_death(coord, blast_coords, game_mode):
-        if surrounding_blowable_count(coord, arena, enemy_locations) >= 6: #destroy at least 6 crates/opponents
-            return 3
-        if surrounding_blowable_count(coord, arena, enemy_locations) >= 3: #destroy at least 3 crates/opponents
-            return 2
-        if surrounding_blowable_count(coord, arena, enemy_locations) >= 1: #destroy at least 1 crates/opponents
-            return 1
-    if coord in bombs or coord in blast_coords: #bomb on current tile or waiting leads to own safe death
+def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_locations, game_mode,
+                              enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns,
+                              blast_to_bomb):
+    output = np.zeros(4, dtype=np.int8)
+
+    for idx, coord in enumerate(coords):
+        if coord in bombs or arena[coord] == -1 or arena[coord] == 1 or coord in enemy_locations or yields_certain_death[idx]:  # if bomb/wall/crate/opponent/certainDeath on tile
+            output[idx] = 2
+        elif possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, blast_to_bomb, enemy_locations):
+            output[idx] = 3
+
+    # if field is empty (or coin), no danger/safe death condition, choose mode dependent value
+    still_empty_idxs = np.where(output < 2)[0]
+    if still_empty_idxs.size > 0:
+        if game_mode == 0:  # coin collecting mode
+            # find leftover tile nearest to any coin
+            nearest_coin_distance = np.inf
+            nearest_idx = []
+
+            for idx in still_empty_idxs:
+                coin_dist = nearest_entity_distance(coords[idx], coins)[0]
+                if coin_dist < nearest_coin_distance:
+                    nearest_coin_distance = coin_dist
+                    nearest_idx.clear()
+                    nearest_idx.append(idx)
+                elif coin_dist == nearest_coin_distance:
+                    nearest_idx.append(idx)
+
+            output[np.random.choice(nearest_idx)] = 1
+
+
+        elif game_mode == 1:  # bombing/crate destroying mode
+            # if planting a bomb on this tile would destroy more crates/opponents that current tile or other neighboring tiles
+            # OR if value for neighboring tiles is still 0 and this tile is nearer to the nearest crate
+
+            max_blow_count = surrounding_blow_count(player_pos, arena, enemy_locations)
+            max_blow_count_idx = [] # last entry if current field
+
+            for idx in still_empty_idxs:
+                blow_count = surrounding_blow_count(coords[idx], arena, enemy_locations)
+                if blow_count > max_blow_count:
+                    max_blow_count = blow_count
+                    max_blow_count_idx.clear()
+                    max_blow_count_idx.append(idx)
+                elif blow_count == max_blow_count:
+                    max_blow_count_idx.append(idx)
+
+            if len(max_blow_count_idx) == 0:
+                nearest_crate_distance = np.inf
+                nearest_crate_distance_idx = []
+
+                for idx in still_empty_idxs:
+                    crates = np.argwhere(arena == 1)
+                    crate_dist = nearest_entity_distance(coords[idx], crates)
+                    if crate_dist < nearest_crate_distance:
+                        nearest_crate_distance = crate_dist
+                        nearest_crate_distance_idx.clear()
+                        nearest_crate_distance_idx.append(idx)
+                    elif crate_dist == nearest_crate_distance:
+                        nearest_crate_distance_idx.append(idx)
+
+                max_blow_count_idx = nearest_crate_distance_idx
+
+            output[np.random.choice(max_blow_count_idx)] = 1
+
+
+        elif game_mode == 2:  # terminator mode
+            # if this tile is nearer to the nearest opponent than other neighboring tiles but not within their bomb spread
+
+            # Check if field is in enemy bomb spread
+            not_bomb_spread_idxs = []
+            for idx in still_empty_idxs:
+                if coords[idx] not in enemy_blast_coords:
+                    not_bomb_spread_idxs.append(idx)
+
+            if len(not_bomb_spread_idxs) > 0:
+                nearest_opp_distance = np.inf
+                nearest_idx = []
+
+                for idx in not_bomb_spread_idxs:
+                    opp_dist = nearest_entity_distance(coords[idx], enemy_locations)[0]
+                    if opp_dist < nearest_opp_distance:
+                        nearest_opp_distance = opp_dist
+                        nearest_idx.clear()
+                        nearest_idx.append(idx)
+                    elif opp_dist == nearest_opp_distance:
+                        nearest_idx.append(idx)
+
+                output[np.random.choice(nearest_idx)] = 1
+
+    return output
+
+
+def get_current_tile_info(coord, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations):
+
+    if (coord in bombs) or (coord in deadly_coords): #bomb on current tile or staying on place leads to own certain death
         return 4
-    else: #if agent does not die from waiting/ placing a bomb would result in own safe death/ not destroy crate
+    elif can_bomb:
+        if surrounding_blow_count(coord, arena, enemy_locations) >= 6: #destroy at least 6 crates/opponents
+            return 3
+        if surrounding_blow_count(coord, arena, enemy_locations) >= 3: #destroy at least 3 crates/opponents
+            return 2
+        if surrounding_blow_count(coord, arena, enemy_locations) >= 1: #destroy at least 1 crates/opponents
+            return 1
+        return 0
+    else:
         return 0
 
+def get_mode(visible_coins, coins_remaining, num_opps_left):
+    if coins_remaining == 0 and num_opps_left > 0: # if enemy agents still alive and all coins have been collected
+        return 2 # terminator mode
+    else:
+        if visible_coins > 0:  # if no. visible coins is greater or equal to 1
+            return 0  # coin collecting mode
+        elif coins_remaining > 0:  # if no. visible coins is 0
+            return 1  # bombing/crate destroying mode
+        else:
+            print(f"Visible Coins: {visible_coins}. Coins remaining: {coins_remaining}. Opponents left: {num_opps_left}")
+            return None
 
 
-def get_mode(coins_available, coins_remaining):
-    if coins_available > 0:  # if no. visible coins is greater or equal to 1
-        return 0  # coin collecting mode
-    elif coins_remaining > 0:  # if no. visible coins is 0
-        return 1  # bombing/crate destroying mode
-    else:  # if enemy agents still alive and all coins have been collected
-        return 2  # terminator mode
+def store_unrecoverable_infos_helper(old_game_state, new_game_state):
+    """
+    Returns number of in this round collected coins, enemies that just died with their points
+    """
 
-def coin_difference(old_game_state, new_game_state):
-    if old_game_state is not None and new_game_state is not None:
-        coins_old = set(old_game_state["coins"])
-        coins_new = set(new_game_state["coins"])
+    coins_old = set(old_game_state["coins"])
+    coins_new = set(new_game_state["coins"])
 
-        opponents_old = set(old_game_state["others"])
-        opponents_new = set(new_game_state["others"])
-        opponents_killed = opponents_old.difference(opponents_new)
-        opponents_scores = []
-        for i in opponents_killed:
-            opponents_scores.append(i[1])
+    opponents_old = {other[0] for other in old_game_state["others"]}
+    opponents_new = {other[0] for other in new_game_state["others"]}
+    opponents_killed_names = opponents_old.difference(opponents_new)
+    opponents_scores = {}
 
-        return len(coins_old.difference(coins_new)), opponents_scores
-    return 0, []
+    for opp in old_game_state["others"]:
+        if opp[0] in opponents_killed_names:
+            opponents_scores[opp[0]] = opp[1]
+
+    return len(coins_old.difference(coins_new)), opponents_scores
 
 
 class PreviousWinner(Features):
@@ -439,7 +570,7 @@ class PreviousWinner(Features):
         origin_xy = location[0], location[1]
 
         # neighbouring tiles
-        neighboring_tiles = get_neighbor_coords(origin_xy)
+        neighboring_tiles = get_neighbor_coords(origin_xy) # [up, right, down, left]
 
         # enemy locations
         enemy_locations = []
@@ -471,11 +602,11 @@ class PreviousWinner(Features):
         nearest_enemy_distance, nearest_enemy = nearest_entity_distance(origin_xy, enemy_locations)
 
         # find neighboring tile that would do the most blowing up damage
-        max_blow_count = surrounding_blowable_count(origin_xy, arena, enemy_locations)
+        max_blow_count = surrounding_blow_count(origin_xy, arena, enemy_locations)
         most_destructive_tile = origin_xy
 
         for coord in neighboring_tiles:
-            blow_count = surrounding_blowable_count(coord, arena, enemy_locations)
+            blow_count = surrounding_blow_count(coord, arena, enemy_locations)
             if blow_count > max_blow_count:
                 max_blow_count = blow_count
                 most_destructive_tile = coord
@@ -536,3 +667,109 @@ class PreviousWinner(Features):
                 sym_str.append(''.join(str(e) for e in transformed_matrix.flatten()) + ''.join(str(e) for e in self.features[4:]))
 
         return sym_str, transforms
+
+
+
+class PreviousWinnerCD(Features):
+    # features used by 'No Time For Caution' with certain death check
+    __slots__ = "features"
+    features : list[int]
+
+    def __init__(self, game_state: dict):
+        self.features = [0] * 6
+
+        ### Relevant Game State Information
+        arena = np.array([game_state["field"]])[0] # todo: whats that np.array & [0] for?
+        coins = game_state["coins"]
+        own_bomb_pos = game_state["own_bomb"]
+        bombs = []
+        bombs_countdown = []
+        if len(game_state["bombs"]):
+            for i in range(len(game_state["bombs"])):
+                bombs.append(game_state["bombs"][i][0])
+                bombs_countdown.append(game_state["bombs"][i][1])
+        blast_coords = []
+        enemy_blast_coords = []
+        blast_countdowns = []
+        blast_to_bomb = []
+        for idx, bomb_coord in enumerate(bombs):
+            for coord in get_blast_coords(bomb_coord, arena):
+                if coord not in blast_coords:
+                    blast_coords.append(coord)
+                    blast_countdowns.append(bombs_countdown[idx])
+                    if own_bomb_pos is not None:
+                        if bomb_coord != own_bomb_pos:
+                            enemy_blast_coords.append(coord)
+                    blast_to_bomb.append(idx)
+                else:
+                    idxx = blast_coords.index(coord)
+                    blast_countdowns[idxx] = min(blast_countdowns[idxx], bombs_countdown[idx])
+                    if blast_countdowns[idxx] > bombs_countdown[idx]:
+                        blast_to_bomb[idxx] = idx
+        explosions = np.array([game_state["explosion_map"]])[0]
+
+        # player agent location
+        player_pos = game_state["self"][3]
+
+        # neighbouring tiles
+        neighboring_tiles = get_neighbor_coords(player_pos) # [up, right, down, left]
+
+        # enemy locations
+        enemy_locations = []
+        if len(game_state["others"]):
+            for i in range(len(game_state["others"])):
+                enemy_locations.append(game_state["others"][i][3])
+
+
+        ### Fill up features
+        game_mode = get_mode(len(game_state["coins"]), game_state["remaining_coins"], len(game_state["others"]))  # game mode feature
+
+        # Calculate deadly coords
+        deadly_coords = update_deadly(blast_coords, blast_countdowns, explosions)
+
+        # find which neighboring tile, if any, yields certain death
+        yields_certain_death = [False] * 4
+        for idx, coord in enumerate(neighboring_tiles):
+            if coord in deadly_coords:
+                yields_certain_death[idx] = True
+
+
+        # information on neighboring fields
+        self.features[:4] =\
+            get_neighboring_tile_infos(player_pos, neighboring_tiles, coins, bombs, arena, enemy_locations, game_mode,
+                                          enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns, blast_to_bomb)
+        # information on current field
+        self.features[4] = get_current_tile_info(player_pos, game_state["self"][2], bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations)  # tile self
+
+        # game mode
+        self.features[5] = game_mode
+
+
+    def __repr__(self):
+        return ''.join(str(e) for e in self.features)
+
+
+    def get_all_sym_str(self) -> tuple[list[str], list[tuple[int, int]]]:
+        feature_as_matrix = np.array([[self.features[0], self.features[1]],
+                                      [self.features[3], self.features[2]]])
+        transforms = []
+        sym_str = []
+
+        for rot in range(4):
+            for flip in [0, 1]:
+                transforms.append((rot, flip))
+
+                transformed_matrix = np.rot90(feature_as_matrix, k=rot)
+                if flip:
+                    transformed_matrix = np.flipud(transformed_matrix)
+                sym_str.append(''.join(str(e) for e in transformed_matrix.flatten()) + ''.join(str(e) for e in self.features[4:]))
+
+        return sym_str, transforms
+
+    def print_me(self):
+        print(np.array([[0, self.features[0], 0],
+                        [self.features[3], self.features[4], self.features[1]],
+                        [0, self.features[2], self.features[5]]]))
+        pass
+
+

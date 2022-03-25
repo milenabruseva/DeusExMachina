@@ -7,9 +7,10 @@ import settings as s
 
 from .callbacks import ALGORITHM
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str, coin_difference
+from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
 from ..reward_sets import RewardGiver
 from ..custom_events import state_to_events
+from ..parameter_decay import AlphaDecayer, QUpdater
 
 
 def setup_training(self):
@@ -21,7 +22,10 @@ def setup_training(self):
     """
 
     # Setup rewards
+    self.learner = AlphaDecayer(self.learning_type, self.learning_param)
     self.reward_giver = RewardGiver(self.event_reward_set, self.dyn_rewards)
+    self.updater = QUpdater(self.upd_type, self.upd_param)
+
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -45,33 +49,43 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if old_game_state is None:
         return
 
-    # Calculate custom events from states
+    ### Calculate custom events from states
     events.extend(state_to_events(old_game_state, self_action, new_game_state))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
-    # Transform state to all equivalent strings and action to index
-    if self.feature == "PreviousWinner":
-        old_game_state["remaining_coins"] = self.remaining_coins
-        coin_diff, killed_opponents_scores = coin_difference(old_game_state, new_game_state)
-        self.remaining_coins -= coin_diff
-        self.killed_opponents_scores.extend(killed_opponents_scores)
-        new_game_state["remaining_coins"] = self.remaining_coins
+    ### Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+        # Old game state of training is (new) game_state of act
+        old_game_state["remaining_coins"] = self.remaining_coins_new
+        old_game_state["own_bomb"] = self.own_bomb_new
 
-    old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
+        coin_diff, _ = store_unrecoverable_infos_helper(old_game_state, new_game_state)
+
+        remaining_coins_new = self.remaining_coins_new - coin_diff
+        own_bomb_new = self.own_bomb_new
+        if own_bomb_new is None:
+            if new_game_state["self"][3] in [bomb[0] for bomb in new_game_state["bombs"]]:
+                own_bomb_new = new_game_state["self"][3]
+        else:
+            if own_bomb_new not in [bomb[0] for bomb in new_game_state["bombs"]]:
+                own_bomb_new = None
+
+        new_game_state["remaining_coins"] = remaining_coins_new
+        new_game_state["own_bomb"] = own_bomb_new
+
+
+    ### Transform state to all equivalent strings and action to index
+    debug_old_state_str = old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
     new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 
     action = self.ACTIONS.index(self_action)
 
-    # Calculate rewards
-    reward = self.reward_giver.rewards_from_events(events) +\
-             self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
-
-    # Update Q-Value
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature != "RollingWindow":
-            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+            self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None:
             # Just use the first entry w/o transform
@@ -92,12 +106,29 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         else:
             # Use transformed
             new_state_str = new_state_str[0][new_idx]
-
     check_state_exist_and_add(self, new_state_str)
 
+    # old state-action pair visited ++1
+    try:
+        self.n_table[old_state_str][action] += 1
+    except KeyError:
+        print(debug_old_state_str[0])
+        print(self.q_table.keys())
+        raise
+
+    ### Calculate rewards
+    reward = self.reward_giver.rewards_from_events(events) +\
+             self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
+
+    if not self.train_fast:
+        print(f"Reward {reward}")
+
+
+    ### Update Q-Value
     q_old = self.q_table[old_state_str][action]
-    q_update = reward + self.gamma * max(self.q_table[new_state_str])
-    self.q_table[old_state_str][action] += self.lr * (q_update - q_old)
+    q_update = reward + self.gamma * self.updater.update(self.q_table[new_state_str], self.n_table[new_state_str])
+    self.q_table[old_state_str][action] += self.learner.alpha(self.n_table[old_state_str][action]) * (q_update - q_old)
+
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -114,20 +145,26 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
 
-    # Calculate custom events from states
+    ### Calculate custom events from states
     events.extend(state_to_events(last_game_state, last_action, None))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
-    # Transform state to string and action to index
+    ### Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+        # Old game state of training is (new) game_state of act
+        last_game_state["remaining_coins"] = self.remaining_coins_new
+        last_game_state["own_bomb"] = self.own_bomb_new
+
+    ### Transform state to string and action to index
     old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
     action = self.ACTIONS.index(last_action)
 
-    # Update Q-Value
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature != "RollingWindow":
-            self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
+        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+            self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None:
             # Just use the first entry w/o transform
@@ -142,15 +179,26 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
                     transformed_action_layout = transformed_action_layout.T
                 action = action_layout_to_action(self, transformed_action_layout, action)
 
+    # old state-action pair visited ++1
+    self.n_table[old_state_str][action] += 1
+
+    ### Update Q-Value
     q_old = self.q_table[old_state_str][action]
     q_update = self.reward_giver.rewards_from_events(events) +\
              self.reward_giver.dynamic_rewards(last_game_state, last_action, None)
-    self.q_table[old_state_str][action] += self.lr * (q_update - q_old)
+    self.q_table[old_state_str][action] += self.learner.alpha(self.n_table[old_state_str][action]) * (q_update - q_old)
 
-    # Store the q_table as json every 100 rounds
+    if not self.train_fast:
+        print(f"Reward {q_update}")
+
+
+    # Store the q_table as json every n rounds
     if (last_game_state["round"] % self.save_n_rounds) == 0:
-        with open(self.proper_filename, "w") as q_table_file:
+        with open(self.q_table_filename, "w") as q_table_file, open(self.n_table_filename, "w") as n_table_file:
             q_table = self.q_table
+            n_table = self.n_table
             q_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
+            n_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
             json.dump(q_table, q_table_file, indent=4, sort_keys=True)
+            json.dump(n_table, n_table_file, indent=4, sort_keys=True)
 

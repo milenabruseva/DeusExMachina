@@ -7,11 +7,11 @@
   "learning_param": 0.1,
   "trace_decay": 0.9,
   "save_n_rounds": 100,
-  "train_fast": false,
+  "train_fast": true,
 
-  "event_reward_set": "coin_focus",
+  "event_reward_set": "coin_minimal",
   "dyn_rewards": [],
 
-  "feature": "PreviousWinner",
-  "q_table_id": "3_strong_rule_based_coin_heaven_conservative_decay"
+  "feature": "PreviousWinnerCD",
+  "q_table_id": "3_strong_rule_based_coin_heaven_debug"
 }

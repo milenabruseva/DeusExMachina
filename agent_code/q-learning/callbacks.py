@@ -4,9 +4,10 @@ import glob
 import json
 import numpy as np
 
-import random
+from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
+from ..parameter_decay import Explorer
 
-from ..features import state_dict_to_feature_str
+from ..features import PreviousWinnerCD
 
 ALGORITHM = 'q-learning'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -23,52 +24,88 @@ def setup(self):
     """
     self.ACTIONS = ACTIONS
     self.actions = range(len(ACTIONS))
-    self.remaining_coins = 9
-    self.killed_opponents_scores = []
+
     with open("q-learning-params.json") as params_file:
         self.logger.info("Loading q-learning parameters from json file")
 
         params = json.load(params_file)
-        self.lr = params["learning_rate"]
+
         self.gamma = params["reward_decay"]
-        self.epsilon = params["e_greedy"]
+        self.explorer_type = params["explorer"]
+        self.upd_param = params["exp_param"]
+
+        self.upd_type = params["update_type"]
+        self.upd_param = params["update_param"]
+
+        self.learning_type = params["learning_type"]
+        self.learning_param = params["learning_param"]
+        self.save_n_rounds = params["save_n_rounds"]
+        self.train_fast = params["train_fast"]
+
         self.event_reward_set = params["event_reward_set"]
         self.dyn_rewards = params["dyn_rewards"]
-        self.train_fast = params["train_fast"]
+
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]
-        self.save_n_rounds = params["save_n_rounds"]
     self.q_table = {}
+    self.n_table = {}
+    self.explorer = Explorer(self.explorer_type, self.upd_param)
 
-    # load q_table from json
+    # Check for q/n_table and load q_table from json
     q_table_filenames = glob.glob('q_table*.json')
-    self.proper_filename = ''
+    self.q_table_filename = ''
+    self.n_table_filename = ''
     last_q_table_dict = None
     for file in q_table_filenames:
         if not os.stat(file).st_size == 0:
             with open(file, "r") as q_table_file:
                 last_q_table_dict = json.load(q_table_file)
                 if "meta" in last_q_table_dict:
-                    if last_q_table_dict["meta"]["algorithm"] == ALGORITHM and\
+                    if last_q_table_dict["meta"]["algorithm"] == ALGORITHM and \
                             last_q_table_dict["meta"]["feature"] == self.feature and \
                             last_q_table_dict["meta"]["q_table_id"] == self.q_table_id:
-                        self.proper_filename = file
-                        break
+                        self.q_table_filename = file
 
-    if not self.proper_filename == '':
-        self.logger.info(f"Loading q_table from {self.proper_filename}")
+                        # Check n_table
+                        n_table_filename_try = self.q_table_filename.replace("q", "n", 1)
+                        with open(n_table_filename_try, "r") as n_table_file:
+                            last_n_table_dict = json.load(n_table_file)
+                            if "meta" in last_n_table_dict:
+                                if last_n_table_dict["meta"]["algorithm"] == ALGORITHM and \
+                                        last_n_table_dict["meta"]["feature"] == self.feature and \
+                                        last_n_table_dict["meta"]["q_table_id"] == self.q_table_id:
+                                    self.n_table_filename = n_table_filename_try
+                                    break
+                                else:
+                                    self.logger.warn(f"q_table {self.q_table_filename} found without corresponding n_table.")
+
+    if not (self.q_table_filename == '' or self.n_table_filename == ''):
+        self.logger.info(f"Loading q_table from {self.q_table_filename} and n_table from {self.n_table_filename}")
         del last_q_table_dict["meta"]
+        del last_n_table_dict["meta"]
         self.q_table = last_q_table_dict
+        self.n_table = last_n_table_dict
     else:
         if not self.train:
             self.logger.warn("Not training and no q_table found")
-        self.logger.info(f"No q_table*.json found, for feature {self.feature} and id {self.q_table_id}. Empty one is used")
-        self.proper_filename = f'q_table_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
+        self.logger.info(f"No q_table*.json <-> n_table*.json pair found, for feature {self.feature} and id {self.q_table_id}. Empty one is used")
+        date_time_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.q_table_filename = f'q_table_{date_time_str}.json'
+        self.n_table_filename = f'n_table_{date_time_str}.json'
 
-   # Action layout for symmetry transformations
+    # Long/Short Term Memory
+    self.prev_game_state = None
+    self.remaining_coins_old = 50 #9
+    self.remaining_coins_new = 50 #9
+    self.killed_opponents_scores = {}
+    self.own_bomb_old = None
+    self.own_bomb_new = None
+
+    # Action layout for symmetry transformations
     self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
                                    [self.ACTIONS.index("LEFT"), 6, self.ACTIONS.index("RIGHT")],
                                    [6, self.ACTIONS.index("DOWN"), 6]], dtype=np.int8)
+
 
 
 def act(self, game_state: dict) -> str:
@@ -86,12 +123,43 @@ def act(self, game_state: dict) -> str:
     #print(state.explosion_map.T)
     #print("-----------------------")
 
+    # Reset at game start:
+    if game_state["step"] == 1:
+        self.prev_game_state = None
+        self.remaining_coins_old = 50  # 9
+        self.remaining_coins_new = 50  # 9
+        self.killed_opponents_scores = {}
+        self.own_bomb_old = None
+        self.own_bomb_new = None
+
+    # Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+        if self.prev_game_state is not None:
+            self.remaining_coins_old = self.remaining_coins_new
+            self.own_bomb_old = self.own_bomb_new
+
+            coin_diff, killed_opponents_w_scores = store_unrecoverable_infos_helper(self.prev_game_state, game_state)
+
+            self.remaining_coins_new -= coin_diff
+            self.killed_opponents_scores.update(killed_opponents_w_scores)
+            if self.own_bomb_old is None:
+                if game_state["self"][3] in [bomb[0] for bomb in game_state["bombs"]]:
+                    self.own_bomb_new = game_state["self"][3]
+            else:
+                if self.own_bomb_old not in [bomb[0] for bomb in game_state["bombs"]]:
+                    self.own_bomb_new = None
+
+        self.prev_game_state = game_state
+        game_state["remaining_coins"] = self.remaining_coins_new
+        game_state["own_bomb"] = self.own_bomb_new
+
+
     state_str = state_dict_to_feature_str(game_state, self.feature)
 
     # Symmetry check
     transform = None
     if type(state_str) is not str:
-        if self.feature != "RollingWindow":
+        if self.feature not in ["RollingWindow", "PreviousWinner"]:
             self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
         state_idx = check_state_exist_w_sym(self, state_str[0])
         if state_idx is None:
@@ -105,14 +173,7 @@ def act(self, game_state: dict) -> str:
     check_state_exist_and_add(self, state_str)
 
     # action selection
-    if random.random() > self.epsilon:
-        # choose best action
-        q_values_of_state = self.q_table[state_str]
-        # some actions may have the same value, randomly choose one of these actions
-        action = random.choice([idx for idx, val in enumerate(q_values_of_state) if val == max(q_values_of_state)])
-    else:
-        # choose random action
-        action = random.choice(self.actions)
+    action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
 
     # Transform action
     if transform is not None:
@@ -123,13 +184,28 @@ def act(self, game_state: dict) -> str:
             transformed_action_layout = np.rot90(transformed_action_layout, k=(-1) * transform[0])
             action = action_layout_to_action(self, transformed_action_layout, action)
 
+    if not self.train_fast:
+        print("In act()")
+        PreviousWinnerCD(game_state).print_me()
+        qs = self.q_table[state_str]
+        qviz = np.array([[np.NAN, qs[0], np.NAN],
+                         [qs[3], qs[4], qs[1]],
+                         [np.NAN, qs[2], qs[5]]])
+        if transform is not None:
+            if transform[1]:
+                qviz = qviz.T
+            qviz = np.rot90(qviz, k=(-1) * transform[0])
+        print(qviz)
+        print("Action took: "+ACTIONS[action])
+
     return ACTIONS[action]
 
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
-        # append new state to q table
+        # append new state to tables
         self.q_table[state_str] = [0] * len(self.actions)
+        self.n_table[state_str] = [1] * len(self.actions)
 
 
 def check_state_exist_w_sym(self, state_str_list: list[str]):

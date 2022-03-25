@@ -7,7 +7,7 @@ import settings as s
 
 from .callbacks import ALGORITHM
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str, coin_difference
+from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
 from ..reward_sets import RewardGiver
 from ..custom_events import state_to_events
 from ..parameter_decay import AlphaDecayer
@@ -24,6 +24,9 @@ def setup_training(self):
     # Setup rewards
     self.learner = AlphaDecayer(self.learning_type, self.learning_param)
     self.reward_giver = RewardGiver(self.event_reward_set, self.dyn_rewards)
+
+    self.can_act = False
+    self.next_action = None
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -45,6 +48,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     """
 
     if old_game_state is None:
+        self.can_act = True
+        self.next_action = self.ACTIONS.index(act(self, new_game_state))
+        self.can_act = False
         return
 
     # Calculate custom events from states
@@ -53,25 +59,42 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
-    # Transform state to all equivalent strings and action to index
-    if self.feature == "PreviousWinner":
-        old_game_state["remaining_coins"] = self.remaining_coins
-        coin_diff, killed_opponents_scores = coin_difference(old_game_state, new_game_state)
-        self.remaining_coins -= coin_diff
-        self.killed_opponents_scores.extend(killed_opponents_scores)
-        new_game_state["remaining_coins"] = self.remaining_coins
+    # Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+        # Old game state of training is (new) game_state of act
+        old_game_state["remaining_coins"] = self.remaining_coins_new
+        old_game_state["own_bomb"] = self.own_bomb_new
 
+        coin_diff, _ = store_unrecoverable_infos_helper(old_game_state, new_game_state)
+
+        remaining_coins_new = self.remaining_coins_new - coin_diff
+        own_bomb_new = self.own_bomb_new
+        if own_bomb_new is None:
+            if new_game_state["self"][3] in [bomb[0] for bomb in new_game_state["bombs"]]:
+                own_bomb_new = new_game_state["self"][3]
+        else:
+            if own_bomb_new not in [bomb[0] for bomb in new_game_state["bombs"]]:
+                own_bomb_new = None
+
+        new_game_state["remaining_coins"] = remaining_coins_new
+        new_game_state["own_bomb"] = own_bomb_new
+
+
+    # Transform state to all equivalent strings and action to index
     old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
     new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 
     action = self.ACTIONS.index(self_action)
-    next_action = self.ACTIONS.index(act(self, new_game_state))
+    self.can_act = True
+    self.next_action = next_action = self.ACTIONS.index(act(self, new_game_state))
+    self.can_act = False
 
     # Calculate rewards
     reward = self.reward_giver.rewards_from_events(events) +\
              self.reward_giver.dynamic_rewards(old_game_state, self_action, new_game_state)
 
-    print(f"Reward {reward}")
+    if not self.train_fast:
+        print(f"Reward {reward}")
 
     # Update Q-Value
     # Symmetry check
@@ -137,8 +160,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
+    # Store unrecoverable game state information
+    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+        # Old game state of training is (new) game_state of act
+        last_game_state["remaining_coins"] = self.remaining_coins_new
+        last_game_state["own_bomb"] = self.own_bomb_new
+
     # Transform state to string and action to index
-    last_game_state["remaining_coins"] = self.remaining_coins
     old_state_str = state_dict_to_feature_str(last_game_state, self.feature)
     action = self.ACTIONS.index(last_action)
 

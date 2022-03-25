@@ -16,6 +16,20 @@ class Explorer:
         return explore_function_dict[self.exp_str](self.exp_param, available_actions, q_values, counts)
 
 
+# Exploration Update Function
+class QUpdater:
+    __slots__ = ("upd_str", "upd_param")
+    upd_str: str
+    upd_param: float
+
+    def __init__(self, upd_str: str, param=None) -> None:
+        self.upd_str = upd_str
+        if param is not None:
+            self.upd_param = param
+
+    def update(self, q_values, counts):
+        return update_function_dict[self.upd_str](self.upd_param, q_values, counts)
+
 
 # Alpha Decayer Class
 class AlphaDecayer:
@@ -34,6 +48,9 @@ class AlphaDecayer:
 
 
 ### Explorer Functions
+
+def best(factor, available_actions, q_values, counts):
+    return random.choice([idx for idx, val in enumerate(q_values) if val == max(q_values)])
 
 def epsilon_greedy(epsilon, available_actions, q_value, counts):
     if random.random() > epsilon:
@@ -56,7 +73,6 @@ def epsilon_decay(epsilon, available_actions, q_value, counts):
 
     return action
 
-
 def explore_function_standard(factor, available_actions, q_value, counts):
     values = []
     for i in range(6):
@@ -65,9 +81,30 @@ def explore_function_standard(factor, available_actions, q_value, counts):
 
 
 
-explore_function_dict = {"e_greedy": epsilon_greedy,
+explore_function_dict = {"best": best,
+                         "e_greedy": epsilon_greedy,
                          "e_decay": epsilon_decay,
                          "explore_standard": explore_function_standard}
+
+
+
+### Update Functions
+
+def q_max(factor, q_values, counts):
+    return max(q_values)
+
+def k_over_n(factor, q_values, counts):
+    values = []
+    for i in range(6):
+        values.append(q_values[i] + factor / counts[i])
+    return max(values)
+
+# Update Dictonary
+
+update_function_dict = {
+    "q_max": q_max,
+    "k_over_n": k_over_n
+}
 
 
 
