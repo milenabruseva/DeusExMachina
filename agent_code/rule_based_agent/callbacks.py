@@ -208,3 +208,5 @@ def act(self, game_state):
                 self.bomb_history.append((x, y))
 
             return a
+
+    return "WAIT"
