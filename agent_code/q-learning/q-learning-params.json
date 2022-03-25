@@ -4,16 +4,16 @@
   "exp_param": 0.0,
 
   "update_type": "k_over_n",
-  "update_param": 100,
+  "update_param": 10,
 
   "learning_type": "ln/n",
   "learning_param": 1,
   "save_n_rounds": 1,
   "train_fast": false,
 
-  "event_reward_set": "coin_minimal",
+  "event_reward_set": "classic",
   "dyn_rewards": [],
 
   "feature": "PreviousWinnerCD",
-  "q_table_id": "3_strong_rule_based_coin_heaven_debug"
+  "q_table_id": "3_strong_rule_based_classic_first_try"
 }

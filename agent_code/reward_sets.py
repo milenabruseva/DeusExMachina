@@ -38,12 +38,12 @@ coin_heaven = {
 
 coin_minimal = {
     e.COIN_COLLECTED: 100,
-    e.GOT_KILLED: -100,
-    e.KILLED_SELF: -50,
-    e.WAITED: -1,
+    #e.GOT_KILLED: -80,
+    #e.KILLED_SELF: -50,
     e.INVALID_ACTION: -500,
-    ce.DECREASED_NEAREST_COIN_DIST: 10,
+    #ce.DECREASED_NEAREST_COIN_DIST: 10,
     ce.INCREASED_NEAREST_COIN_DIST: -11,
+    ce.SAME_NEAREST_COIN_DIST: -11
 }
 
 # Dynamic Reward Functions

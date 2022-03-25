@@ -77,17 +77,19 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
 
     ### Transform state to all equivalent strings and action to index
-    debug_old_state_str = old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
+    debug_old_state_str = old_state_str = self.prev_game_state_str
+    #debug_old_state_str = old_state_str = state_dict_to_feature_str(old_game_state, self.feature)
     new_state_str = state_dict_to_feature_str(new_game_state, self.feature)
 
     action = self.ACTIONS.index(self_action)
 
     # Symmetry check
+    new_state_transform = None
     if type(old_state_str) is not str:
         if self.feature not in ["RollingWindow", "PreviousWinner"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
-        if old_idx is None:
+        if old_idx is None or old_state_str[1][0] is None:
             # Just use the first entry w/o transform
             old_state_str = old_state_str[0][0]
         else:
@@ -105,6 +107,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
             new_state_str = new_state_str[0][0]
         else:
             # Use transformed
+            new_state_transform = new_state_str[1][new_idx]
             new_state_str = new_state_str[0][new_idx]
     check_state_exist_and_add(self, new_state_str)
 
@@ -129,6 +132,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     q_update = reward + self.gamma * self.updater.update(self.q_table[new_state_str], self.n_table[new_state_str])
     self.q_table[old_state_str][action] += self.learner.alpha(self.n_table[old_state_str][action]) * (q_update - q_old)
 
+    ### Save state string and transform in short term memory
+    self.next_game_state_str = ([new_state_str], [new_state_transform])
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -166,7 +171,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         if self.feature not in ["RollingWindow", "PreviousWinner"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
-        if old_idx is None:
+        if old_idx is None or old_state_str[1][0] is None:
             # Just use the first entry w/o transform
             old_state_str = old_state_str[0][0]
         else:

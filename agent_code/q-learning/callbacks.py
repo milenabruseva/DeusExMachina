@@ -94,9 +94,11 @@ def setup(self):
         self.n_table_filename = f'n_table_{date_time_str}.json'
 
     # Long/Short Term Memory
+    self.prev_game_state_str = None
+    self.next_game_state_str = None
     self.prev_game_state = None
-    self.remaining_coins_old = 50 #9
-    self.remaining_coins_new = 50 #9
+    self.remaining_coins_old = 9
+    self.remaining_coins_new = 9
     self.killed_opponents_scores = {}
     self.own_bomb_old = None
     self.own_bomb_new = None
@@ -125,9 +127,11 @@ def act(self, game_state: dict) -> str:
 
     # Reset at game start:
     if game_state["step"] == 1:
+        self.prev_game_state_str = None
+        self.next_game_state_str = None
         self.prev_game_state = None
-        self.remaining_coins_old = 50  # 9
-        self.remaining_coins_new = 50  # 9
+        self.remaining_coins_old = 9
+        self.remaining_coins_new = 9
         self.killed_opponents_scores = {}
         self.own_bomb_old = None
         self.own_bomb_new = None
@@ -154,7 +158,10 @@ def act(self, game_state: dict) -> str:
         game_state["own_bomb"] = self.own_bomb_new
 
 
-    state_str = state_dict_to_feature_str(game_state, self.feature)
+    if self.next_game_state_str is not None:
+        state_str = self.next_game_state_str
+    else:
+        state_str = state_dict_to_feature_str(game_state, self.feature)
 
     # Symmetry check
     transform = None
@@ -162,7 +169,7 @@ def act(self, game_state: dict) -> str:
         if self.feature not in ["RollingWindow", "PreviousWinner"]:
             self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
         state_idx = check_state_exist_w_sym(self, state_str[0])
-        if state_idx is None:
+        if state_idx is None or state_str[1][0] is None:
             # Just use the first entry w/o transform
             state_str = state_str[0][0]
         else:
@@ -198,13 +205,37 @@ def act(self, game_state: dict) -> str:
         print(qviz)
         print("Action took: "+ACTIONS[action])
 
+    # Save state string and transform in short term memory
+    self.prev_game_state_str = ([state_str], [transform])
+
     return ACTIONS[action]
 
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
         # append new state to tables
-        self.q_table[state_str] = [0] * len(self.actions)
+        self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
+        for i in range(4):
+            if state_str[i] == "1" :
+                self.q_table[state_str][i] = 10
+            elif state_str[i] == "2":
+                self.q_table[state_str][i] = 0
+        if state_str[5] in ["0", "1", "2"]:
+            if state_str[:4].count("2") == 2 and ((state_str[:4].count("22") == 1) or (state_str[0] == "2" and state_str[3] == "2")):
+                self.q_table[state_str][5] = -10
+            else:
+                if state_str[4] == "0":
+                    pass
+                elif state_str[4] == "1":
+                    self.q_table[state_str][5] = 10
+                elif state_str[4] == "2":
+                    self.q_table[state_str][5] = 15
+                elif state_str[4] == "3":
+                    self.q_table[state_str][5] = 20
+                elif state_str[4] == "4":
+                    self.q_table[state_str][4] = -10
+                    self.q_table[state_str][5] = -10
+
         self.n_table[state_str] = [1] * len(self.actions)
 
 

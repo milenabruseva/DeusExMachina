@@ -294,7 +294,7 @@ def update_deadly(blast_coords, blast_countdowns, explosions):
     for idx, coord in enumerate(blast_coords):
         if blast_countdowns[idx] == 0:
             deadly_coords.append(coord)
-    deadly_coords.extend(tuple(map(tuple, np.argwhere(explosions == 2))))
+    deadly_coords.extend(tuple(map(tuple, np.argwhere(explosions == 1))))
 
     return deadly_coords
 
@@ -357,7 +357,7 @@ def possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, 
         idx = blast_coords.index(coord)
         bomb_pos = bombs[blast_to_bomb[idx]]
         dist_to_bomb = manhattan_distance(coord, bomb_pos)
-        if (blast_countdowns[idx] - 1) - (3 - dist_to_bomb) <= 0:
+        if (blast_countdowns[idx]) - (3 - dist_to_bomb) <= 0:
             return True
 
     return False
@@ -427,6 +427,8 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                     nearest_idx.append(idx)
 
             output[np.random.choice(nearest_idx)] = 1
+            # for idx in nearest_idx:
+            #     output[idx] = 1
 
 
         elif game_mode == 1:  # bombing/crate destroying mode
@@ -462,6 +464,8 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                 max_blow_count_idx = nearest_crate_distance_idx
 
             output[np.random.choice(max_blow_count_idx)] = 1
+            # for idx in max_blow_count_idx:
+            #     output[idx] = 1
 
 
         elif game_mode == 2:  # terminator mode
@@ -486,7 +490,9 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                     elif opp_dist == nearest_opp_distance:
                         nearest_idx.append(idx)
 
-                output[np.random.choice(nearest_idx)] = 1
+                output[np.random.choice(not_bomb_spread_idxs)] = 1
+                # for idx in nearest_idx:
+                #     output[idx] = 1
 
     return output
 
@@ -706,7 +712,7 @@ class PreviousWinnerCD(Features):
                     blast_countdowns[idxx] = min(blast_countdowns[idxx], bombs_countdown[idx])
                     if blast_countdowns[idxx] > bombs_countdown[idx]:
                         blast_to_bomb[idxx] = idx
-        explosions = np.array([game_state["explosion_map"]])[0]
+        explosions = game_state["explosion_map"]
 
         # player agent location
         player_pos = game_state["self"][3]
@@ -762,7 +768,8 @@ class PreviousWinnerCD(Features):
                 transformed_matrix = np.rot90(feature_as_matrix, k=rot)
                 if flip:
                     transformed_matrix = np.flipud(transformed_matrix)
-                sym_str.append(''.join(str(e) for e in transformed_matrix.flatten()) + ''.join(str(e) for e in self.features[4:]))
+                sym_str.append(str(transformed_matrix[0,0]) + str(transformed_matrix[0,1]) + str(transformed_matrix[1,1])
+                               + str(transformed_matrix[1,0]) + ''.join(str(e) for e in self.features[4:]))
 
         return sym_str, transforms
 
