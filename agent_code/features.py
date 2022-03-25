@@ -585,8 +585,8 @@ def get_mode(visible_coins, coins_remaining, num_opps_left):
         elif coins_remaining > 0:  # if no. visible coins is 0
             return 1  # bombing/crate destroying mode
         else:
+            return 1
             #print(f"Visible Coins: {visible_coins}. Coins remaining: {coins_remaining}. Opponents left: {num_opps_left}")
-            return None
 
 
 def store_unrecoverable_infos_helper(old_game_state, new_game_state):
