@@ -340,7 +340,7 @@ def safe_death(coord, blast_coords, game_mode):
 def certain_death_in_n_steps(coord, arena, player_pos, bombs, blast_coords, blast_countdowns, explosions, enemy_locations, n=4):
     pass
 
-def safe_to_bomb(player_pos, arena, has_bomb, deadly_coords):
+def safe_to_bomb(player_pos, arena, has_bomb, deadly_coords, coins):
     if has_bomb:
         safe_left = True
         safe_right = True
@@ -349,16 +349,16 @@ def safe_to_bomb(player_pos, arena, has_bomb, deadly_coords):
         x, y = player_pos
         for i in range(1, 4):
             if 0 <= x + i <= 16 and 0 <= y <= 16:
-                if arena[(x+i, y)] != 0 or (x+i, y) in deadly_coords:
+                if arena[(x+i, y)] == 1 or arena[(x+i, y)] == -1 or (x+i, y) in deadly_coords:
                     safe_right = False
             if 0 <= x - i <= 16 and 0 <= y <= 16:
-                if arena[(x-i, y)] != 0 or (x-i, y) in deadly_coords:
+                if arena[(x-i, y)] == 1 or arena[(x-i, y)] == -1 or (x-i, y) in deadly_coords:
                     safe_left = False
-            if 0 <= x <= 16 and 0 <= y + i <= 16:
-                if arena[(x, y+i)] != 0 or (x, y+i) in deadly_coords:
-                    safe_up = False
             if 0 <= x <= 16 and 0 <= y - i <= 16:
-                if arena[(x, y - i)] != 0 or (x, y-i) in deadly_coords:
+                if arena[(x, y - i)] == 1 or arena[(x, y - i)] == -1 or (x, y-i) in deadly_coords:
+                    safe_up = False
+            if 0 <= x <= 16 and 0 <= y + i <= 16:
+                if arena[(x, y+i)] == 1 or arena[(x, y+i)] == -1 or (x, y+i) in deadly_coords:
                     safe_down = False
 
         if safe_left or safe_right or safe_down or safe_up:
@@ -368,38 +368,39 @@ def safe_to_bomb(player_pos, arena, has_bomb, deadly_coords):
             for i in range(1, 3):
                 if 0 <= x + i <= 16:
                     if 0 <= y + 1 <= 16:
-                        if arena[(x + i, y + 1)] == 0 and (x + i, y + 1) not in deadly_coords:
+                        if (arena[(x + i, y + 1)] == 0 or (x + i, y + 1) in coins) and (x + i, y + 1) not in deadly_coords:
                             return True
                     if 0 <= y - 1 <= 16:
-                        if arena[(x + i, y - 1)] == 0 and (x + i, y - 1) not in deadly_coords:
+                        if (arena[(x + i, y - 1)] == 0 or (x + i, y - 1) in coins) and (x + i, y - 1) not in deadly_coords:
                             return True
         if not safe_left:
             for i in range(1, 3):
                 if 0 <= x - i <= 16:
                     if 0 <= y + 1 <= 16:
-                        if arena[(x - i, y + 1)] == 0 and (x - i, y + 1) not in deadly_coords:
+                        if (arena[(x - i, y + 1)] == 0 or (x - i, y + 1) in coins) and (x - i, y + 1) not in deadly_coords:
                             return True
                     if 0 <= y - 1 <= 16:
-                        if arena[(x - i, y - 1)] == 0 and (x - i, y - 1) not in deadly_coords:
+                        if (arena[(x - i, y - 1)] == 0 or (x - i, y - 1) in coins) and (x - i, y - 1) not in deadly_coords:
                             return True
         if not safe_up:
             for i in range(1, 3):
-                if 0 <= y + i <= 16:
+                if 0 <= y - i <= 16:
                     if 0 <= x + 1 <= 16:
-                        if arena[(x + 1, y + i)] == 0 and (x + 1, y + i) not in deadly_coords:
+                        if (arena[(x + 1, y - i)] == 0 or (x + 1, y - i) in coins) and (x + 1, y - i) not in deadly_coords:
                             return True
                     if 0 <= x - 1 <= 16:
-                        if arena[(x - 1, y + i)] == 0 and (x - 1, y + i) not in deadly_coords:
+                        if (arena[(x - 1, y - i)] == 0 or (x - 1, y - i) in coins) and (x - 1, y - i) not in deadly_coords:
                             return True
         if not safe_down:
             for i in range(1, 3):
-                if 0 <= y - i <= 16:
+                if 0 <= y + i <= 16:
                     if 0 <= x + 1 <= 16:
-                        if arena[(x + 1, y - i)] == 0 and (x + 1, y - i) not in deadly_coords:
+                        if (arena[(x + 1, y + i)] == 0 or (x + 1, y + i) in coins) and (x + 1, y + i) not in deadly_coords:
                             return True
                     if 0 <= x - 1 <= 16:
-                        if arena[(x - 1, y - i)] == 0 and (x - 1, y - i) not in deadly_coords:
+                        if (arena[(x - 1, y + i)] == 0 or (x - 1, y + i) in coins) and (x - 1, y + i) not in deadly_coords:
                             return True
+
         return False
     return False
 
@@ -416,6 +417,7 @@ def possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, 
         return True
 
     # Running towards a bomb
+
     if coord in blast_coords:
         idx = blast_coords.index(coord)
         bomb_pos = bombs[blast_to_bomb[idx]]
@@ -461,9 +463,84 @@ def get_neighboring_tile_info(coord, idx, coins, bombs, arena, enemy_locations, 
         return 0
 
 
+def safe_to_follow(player_pos, tile, coords, bombs, deadly_coords, blast_coords, arena, coins):
+    if player_pos in bombs:
+        safe_left = True
+        safe_right = True
+        safe_up = True
+        safe_down = True
+        x, y = tile
+
+        if tile == coords[0]: #UP
+            for i in range(1, 3):
+                if 0 <= x <= 16 and 0 <= y - i <= 16:
+                    if arena[(x, y - i)] == 1 or arena[(x, y - i)] == -1 or (x, y - i) in deadly_coords:
+                        safe_up = False
+            if not safe_up:
+                for i in range(0, 2):
+                    if 0 <= y - i <= 16:
+                        if 0 <= x + 1 <= 16:
+                            if (arena[(x + 1, y - i)] == 0 or (x + 1, y - i) in coins) and (x + 1, y - i) not in deadly_coords:
+                                return True
+                        if 0 <= x - 1 <= 16:
+                            if (arena[(x - 1, y - i)] == 0 or (x - 1, y - i) in coins) and (x - 1, y - i) not in deadly_coords:
+                                return True
+            return safe_up
+
+        if tile == coords[2]: #DOWN
+            for i in range(1, 3):
+                if 0 <= x <= 16 and 0 <= y + i <= 16:
+                    if arena[(x, y + i)] == 1 or arena[(x, y + i)] == -1 or (x, y + i) in deadly_coords:
+                        safe_down = False
+            if not safe_down:
+                for i in range(0, 2):
+                    if 0 <= y + i <= 16:
+                        if 0 <= x + 1 <= 16:
+                            if (arena[(x + 1, y + i)] == 0 or (x + 1, y + i) in coins) and (x + 1, y + i) not in deadly_coords:
+                                return True
+                        if 0 <= x - 1 <= 16:
+                            if (arena[(x - 1, y + i)] == 0 or (x - 1, y + i) in coins) and (x - 1, y + i) not in deadly_coords:
+                                return True
+            return safe_down
+
+        if tile == coords[1]: #RIGHT
+            for i in range(1, 3):
+                if 0 <= x + i <= 16 and 0 <= y <= 16:
+                    if arena[(x + i, y)] == 1 or arena[(x + i, y)] == -1 or (x + i, y) in deadly_coords:
+                        safe_right = False
+            if not safe_right:
+                for i in range(0, 2):
+                    if 0 <= x + i <= 16:
+                        if 0 <= y + 1 <= 16:
+                            if (arena[(x + i, y + 1)] == 0 or (x + i, y + 1) in coins) and (x + i, y + 1) not in deadly_coords:
+                                return True
+                        if 0 <= y - 1 <= 16:
+                            if (arena[(x + i, y - 1)] == 0 or (x + i, y - 1) in coins) and (x + i, y - 1) not in deadly_coords:
+                                return True
+            return safe_right
+
+        if tile == coords[3]: #LEFT
+            for i in range(1, 3):
+                if 0 <= x - i <= 16 and 0 <= y <= 16:
+                    if arena[(x - i, y)] == 1 or arena[(x - i, y)] == -1 or (x - i, y) in deadly_coords:
+                        safe_left = False
+            if not safe_left:
+                for i in range(0, 2):
+                    if 0 <= x - i <= 16:
+                        if 0 <= y + 1 <= 16:
+                            if (arena[(x - i, y + 1)] == 0 or (x - i, y + 1) in coins) and (x - i, y + 1) not in deadly_coords:
+                                return True
+                        if 0 <= y - 1 <= 16:
+                            if (arena[(x - i, y - 1)] == 0 or (x - i, y - 1) in coins) and (x - i, y - 1) not in deadly_coords:
+                                return True
+            return safe_left
+
+    return True
+
+
 def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_locations, game_mode,
                               enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns,
-                              blast_to_bomb):
+                              blast_to_bomb, deadly_coords):
     output = np.zeros(4, dtype=np.int8)
 
     for idx, coord in enumerate(coords):
@@ -474,6 +551,7 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
 
     # if field is empty (or coin), no danger/safe death condition, choose mode dependent value
     still_empty_idxs = np.where(output < 2)[0]
+
     if still_empty_idxs.size > 0:
         if game_mode == 0:  # coin collecting mode
             # find leftover tile nearest to any coin
@@ -481,15 +559,17 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
             nearest_idx = []
 
             for idx in still_empty_idxs:
-                coin_dist = nearest_entity_distance(coords[idx], coins)[0]
-                if coin_dist < nearest_coin_distance:
-                    nearest_coin_distance = coin_dist
-                    nearest_idx.clear()
-                    nearest_idx.append(idx)
-                elif coin_dist == nearest_coin_distance:
-                    nearest_idx.append(idx)
+                 if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx], coords, bombs, deadly_coords, blast_coords, arena, coins):
+                    coin_dist = nearest_entity_distance(coords[idx], coins)[0]
+                    if coin_dist < nearest_coin_distance:
+                        nearest_coin_distance = coin_dist
+                        nearest_idx.clear()
+                        nearest_idx.append(idx)
+                    elif coin_dist == nearest_coin_distance:
+                        nearest_idx.append(idx)
 
-            output[np.random.choice(nearest_idx)] = 1
+            if len(nearest_idx):
+                output[np.random.choice(nearest_idx)] = 1
             # for idx in nearest_idx:
             #     output[idx] = 1
 
@@ -502,13 +582,16 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
             max_blow_count_idx = [] # last entry if current field
 
             for idx in still_empty_idxs:
-                blow_count = surrounding_blow_count(coords[idx], arena, enemy_locations)
-                if blow_count > max_blow_count:
-                    max_blow_count = blow_count
-                    max_blow_count_idx.clear()
-                    max_blow_count_idx.append(idx)
-                elif blow_count == max_blow_count:
-                    max_blow_count_idx.append(idx)
+                if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx], coords,
+                                                                                        bombs, deadly_coords,
+                                                                                        blast_coords, arena, coins):
+                    blow_count = surrounding_blow_count(coords[idx], arena, enemy_locations)
+                    if blow_count > max_blow_count:
+                        max_blow_count = blow_count
+                        max_blow_count_idx.clear()
+                        max_blow_count_idx.append(idx)
+                    elif blow_count == max_blow_count:
+                        max_blow_count_idx.append(idx)
 
             if len(max_blow_count_idx) == 0:
                 nearest_crate_distance = np.inf
@@ -517,17 +600,21 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                 for idx in still_empty_idxs:
                     crates = np.argwhere(arena == 1)
                     #crates = tuple(map(tuple, crates))
-                    crate_dist, _ = nearest_entity_distance(coords[idx], crates)
-                    if crate_dist < nearest_crate_distance:
-                        nearest_crate_distance = crate_dist
-                        nearest_crate_distance_idx.clear()
-                        nearest_crate_distance_idx.append(idx)
-                    elif crate_dist == nearest_crate_distance:
-                        nearest_crate_distance_idx.append(idx)
+                    if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx],
+                                                                                            coords, bombs,
+                                                                                            deadly_coords, blast_coords,
+                                                                                            arena, coins):
+                        crate_dist, _ = nearest_entity_distance(coords[idx], crates)
+                        if crate_dist < nearest_crate_distance:
+                            nearest_crate_distance = crate_dist
+                            nearest_crate_distance_idx.clear()
+                            nearest_crate_distance_idx.append(idx)
+                        elif crate_dist == nearest_crate_distance:
+                            nearest_crate_distance_idx.append(idx)
 
                 max_blow_count_idx = nearest_crate_distance_idx
-
-            output[np.random.choice(max_blow_count_idx)] = 1
+            if len(max_blow_count_idx):
+                output[np.random.choice(max_blow_count_idx)] = 1
             # for idx in max_blow_count_idx:
             #     output[idx] = 1
 
@@ -561,20 +648,21 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
     return output
 
 
-def get_current_tile_info(coord, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations):
+def get_current_tile_info(coord, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations, has_bomb):
 
-    if (coord in bombs) or (coord in deadly_coords): #bomb on current tile or staying on place leads to own certain death
+    if (coord in bombs) or (coord in deadly_coords) or (coord in blast_coords): #bomb on current tile or staying in place leads to own certain death
         return 4
-    elif can_bomb:
+    if ((coord not in blast_coords) and not has_bomb) or (not can_bomb) or (surrounding_blow_count(coord, arena, enemy_locations) ==  0):
+        return 0
+    if can_bomb:
         if surrounding_blow_count(coord, arena, enemy_locations) >= 6: #destroy at least 6 crates/opponents
             return 3
         if surrounding_blow_count(coord, arena, enemy_locations) >= 3: #destroy at least 3 crates/opponents
             return 2
         if surrounding_blow_count(coord, arena, enemy_locations) >= 1: #destroy at least 1 crates/opponents
             return 1
-        return 0
-    else:
-        return 0
+    print("we here :(")
+    return 0
 
 def get_mode(visible_coins, coins_remaining, num_opps_left):
     if coins_remaining == 0 and num_opps_left > 0: # if enemy agents still alive and all coins have been collected
@@ -807,11 +895,11 @@ class PreviousWinnerCD(Features):
         # information on neighboring fields
         self.features[:4] =\
             get_neighboring_tile_infos(player_pos, neighboring_tiles, coins, bombs, arena, enemy_locations, game_mode,
-                                          enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns, blast_to_bomb)
+                                          enemy_blast_coords, yields_certain_death, blast_coords, blast_countdowns, blast_to_bomb, deadly_coords)
         # information on current field
-        can_bomb = safe_to_bomb(player_pos, arena, game_state["self"][2], deadly_coords)
+        can_bomb = safe_to_bomb(player_pos, arena, game_state["self"][2], deadly_coords, coins)
 
-        self.features[4] = get_current_tile_info(player_pos, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations)  # tile self
+        self.features[4] = get_current_tile_info(player_pos, can_bomb, bombs, deadly_coords, blast_coords, blast_countdowns, explosions, game_mode, arena, enemy_locations, game_state["self"][2])  # tile self
 
         # game mode
         self.features[5] = game_mode
