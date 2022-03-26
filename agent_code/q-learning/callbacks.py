@@ -191,7 +191,7 @@ def act(self, game_state: dict) -> str:
     else:
         action = ACTIONS.index(self.piggy.carry(game_state))
 
-    if (self.remaining_coins_new == 0) and (np.count_nonzero(game_state["field"] == 1) == 0) and (len(game_state["others"]) <= 1):
+    if time_for_bed(game_state, self):
         action = ACTIONS.index("BOMB")
 
     # Transform action
@@ -222,6 +222,26 @@ def act(self, game_state: dict) -> str:
 
     return ACTIONS[action]
 
+
+def time_for_bed(game_state, self):
+    self_score = game_state["self"][1]
+    remaining_points_possible = self.remaining_coins_new + len(game_state["others"]) * 5
+    max_opponent_scores_possible = {}
+
+    for opp in game_state["others"]:
+        max_opponent_scores_possible[opp[0]] = opp[1] + remaining_points_possible - 5
+
+    killed_opponents_winning = len({opponent:score for (opponent,score) in self.killed_opponents_scores.items() if score >= self_score})
+    living_opponents_can_win = len({opponent:score for (opponent,score) in max_opponent_scores_possible.items() if score >= self_score})
+
+    if self_score >= 10:
+        return True
+    elif not killed_opponents_winning and not living_opponents_can_win:
+        return True
+    elif remaining_points_possible == 0: # killed opponents are winning, but no more points possible
+        return True
+    else:
+        return False
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
