@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from heapq import heappush, heappop
 from typing import List, Tuple
 
 import numpy as np
@@ -276,7 +277,27 @@ class RollingWindow(Features):
 
         return sym_str, transforms
 
+def places_reachable_obstacles_only(coord, arena):
+    places_reachable = []
+    neighbors = get_neighbor_coords(coord)
+    for pos in neighbors:
+        if not (arena[pos] in (1, -1)):
+            places_reachable.append(pos)
+    return places_reachable
 
+def is_path_possible_astar(arena, player_position, end_goal_position):
+    open_positions = []
+    heappush(open_positions, (0 + manhattan_distance(player_position, end_goal_position), 0, player_position))
+    closed_positions = set()
+    while open_positions:
+        _, cost, current_position = heappop(open_positions)
+        if current_position == end_goal_position:
+            return True
+        if current_position not in closed_positions:
+            closed_positions.add(current_position)
+            for neighbour in places_reachable_obstacles_only(current_position, arena):
+                heappush(open_positions, (cost + manhattan_distance(neighbour, end_goal_position), cost + 1, neighbour))
+    return False
 
 # Helper functions for previous year winner features
 def manhattan_distance(x1: tuple[int, int], x2: tuple[int, int]):
@@ -880,7 +901,8 @@ class PreviousWinnerCD(Features):
 
 
         ### Fill up features
-        game_mode = get_mode(len(game_state["coins"]), game_state["remaining_coins"], len(game_state["others"]))  # game mode feature
+        coins_reachable = np.count_nonzero([is_path_possible_astar(arena, player_pos, coin) for coin in game_state["coins"]])
+        game_mode = get_mode(coins_reachable, game_state["remaining_coins"], len(game_state["others"]))  # game mode feature
 
         # Calculate deadly coords
         deadly_coords = update_deadly(blast_coords, blast_countdowns, explosions)

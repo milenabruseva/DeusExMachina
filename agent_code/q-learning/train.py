@@ -50,7 +50,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         return
 
     ### Calculate custom events from states
-    events.extend(state_to_events(old_game_state, self_action, new_game_state))
+    events.extend(state_to_events(old_game_state, self_action, new_game_state, self.killed_opponents_scores, False))
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
@@ -86,7 +86,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Symmetry check
     new_state_transform = None
     if type(old_state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None or old_state_str[1][0] is None:
@@ -159,7 +159,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
 
     ### Calculate custom events from states
-    events.extend(state_to_events(self.prev_game_state, last_action, last_game_state))
+    events.extend(
+        state_to_events(self.prev_game_state, last_action, last_game_state, self.killed_opponents_scores, False))
 
     if not self.train_fast:
         self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
@@ -191,7 +192,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinner"]:
+        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None or old_state_str[1][0] is None:

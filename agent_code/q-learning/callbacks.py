@@ -243,6 +243,7 @@ def time_for_bed(game_state, self):
     else:
         return False
 
+
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
         # append new state to tables
