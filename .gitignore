@@ -111,3 +111,5 @@ screenshots/*.webm
 
 replays/
 results/
+graphs/
+training_data/
