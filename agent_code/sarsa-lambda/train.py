@@ -2,15 +2,12 @@ from typing import List
 import json
 import numpy as np
 
-import events as e
-import settings as s
-
 from .callbacks import ALGORITHM
 from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from ..reward_sets import RewardGiver
-from ..custom_events import state_to_events
-from ..parameter_decay import AlphaDecayer
+from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
+from agent_code.utils.reward_sets import RewardGiver
+from agent_code.utils.custom_events import state_to_events
+from agent_code.utils.parameter_decay import AlphaDecayer
 
 
 def setup_training(self):
@@ -60,7 +57,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     # Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         # Old game state of training is (new) game_state of act
         old_game_state["remaining_coins"] = self.remaining_coins_new
         old_game_state["own_bomb"] = self.own_bomb_new
@@ -161,7 +158,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     # Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         # Old game state of training is (new) game_state of act
         last_game_state["remaining_coins"] = self.remaining_coins_new
         last_game_state["own_bomb"] = self.own_bomb_new

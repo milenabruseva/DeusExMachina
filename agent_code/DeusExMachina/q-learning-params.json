@@ -1,0 +1,20 @@
+{
+  "reward_decay": 0.99,
+  "explorer": "e_greedy",
+  "exp_param": 0.3,
+  "piggy_name": "rule_based_agent",
+
+  "update_type": "q_max",
+  "update_param": 1,
+
+  "learning_type": "ln/n",
+  "learning_param": 1.5,
+  "save_n_rounds": 100,
+  "train_fast": true,
+
+  "event_reward_set": "classic",
+  "dyn_rewards": [],
+
+  "feature": "DeusExMachinaFeatures",
+  "q_table_id": "3_strong_rule_based_classic"
+}

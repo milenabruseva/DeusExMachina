@@ -29,10 +29,8 @@ def state_dict_to_feature(state_dict, feature_type) -> Features:
         return LocalVision(state_dict)
     elif feature_type == "RollingWindow":
         return RollingWindow(state_dict)
-    elif feature_type == "PreviousWinner":
-        return PreviousWinner(state_dict)
-    elif feature_type == "PreviousWinnerCD":
-        return PreviousWinnerCD(state_dict)
+    elif feature_type == "DeusExMachinaFeatures":
+        return DeusExMachinaFeatures(state_dict)
     else:
         return None
 
@@ -41,10 +39,8 @@ def state_dict_to_feature_str(state_dict, feature_type):
         return str(LocalVision(state_dict))
     elif feature_type == "RollingWindow":
         return RollingWindow(state_dict).get_all_sym_str()
-    elif feature_type == "PreviousWinner":
-        return PreviousWinner(state_dict).get_all_sym_str()
-    elif feature_type == "PreviousWinnerCD":
-        return PreviousWinnerCD(state_dict).get_all_sym_str()
+    elif feature_type == "DeusExMachinaFeatures":
+        return DeusExMachinaFeatures(state_dict).get_all_sym_str()
     else:
         return None
 
@@ -565,7 +561,7 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
     output = np.zeros(4, dtype=np.int8)
 
     for idx, coord in enumerate(coords):
-        if coord in bombs or arena[coord] == -1 or arena[coord] == 1 or coord in enemy_locations or yields_certain_death[idx]:  # if bomb/wall/crate/opponent/certainDeath on tile
+        if coord in bombs or arena[coord] == -1 or arena[coord] == 1 or coord in enemy_locations or yields_certain_death[idx] or not safe_to_follow(player_pos, coords[idx], coords, bombs, deadly_coords, blast_coords, arena, coins):  # if bomb/wall/crate/oppcoordinDeath on tile
             output[idx] = 2
         elif possibly_yields_danger(coord, arena, blast_coords, blast_countdowns, bombs, blast_to_bomb, enemy_locations):
             output[idx] = 3
@@ -580,7 +576,7 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
             nearest_idx = []
 
             for idx in still_empty_idxs:
-                 if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx], coords, bombs, deadly_coords, blast_coords, arena, coins):
+                 if arena[coords[idx]] == 0 or coords[idx] in coins:
                     coin_dist = nearest_entity_distance(coords[idx], coins)[0]
                     if coin_dist < nearest_coin_distance:
                         nearest_coin_distance = coin_dist
@@ -603,9 +599,7 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
             max_blow_count_idx = [] # last entry if current field
 
             for idx in still_empty_idxs:
-                if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx], coords,
-                                                                                        bombs, deadly_coords,
-                                                                                        blast_coords, arena, coins):
+                if arena[coords[idx]] == 0 or coords[idx] in coins:
                     blow_count = surrounding_blow_count(coords[idx], arena, enemy_locations)
                     if blow_count > max_blow_count:
                         max_blow_count = blow_count
@@ -618,14 +612,12 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                 nearest_crate_distance = np.inf
                 nearest_crate_distance_idx = []
 
-                for idx in still_empty_idxs:
+                for idx in max_blow_count_idx:
                     crates = np.argwhere(arena == 1)
                     #crates = tuple(map(tuple, crates))
-                    if (arena[coords[idx]] == 0 or coords[idx] in coins) and safe_to_follow(player_pos, coords[idx],
-                                                                                            coords, bombs,
-                                                                                            deadly_coords, blast_coords,
-                                                                                            arena, coins):
+                    if arena[coords[idx]] == 0 or coords[idx] in coins:
                         crate_dist, _ = nearest_entity_distance(coords[idx], crates)
+                        #print(str(coords[idx]) + " has nearest crate distance of " + str(crate_dist))
                         if crate_dist < nearest_crate_distance:
                             nearest_crate_distance = crate_dist
                             nearest_crate_distance_idx.clear()
@@ -662,7 +654,7 @@ def get_neighboring_tile_infos(player_pos, coords, coins, bombs, arena, enemy_lo
                     elif opp_dist == nearest_opp_distance:
                         nearest_idx.append(idx)
 
-                output[np.random.choice(not_bomb_spread_idxs)] = 1
+                output[np.random.choice(nearest_idx)] = 1
                 # for idx in nearest_idx:
                 #     output[idx] = 1
 
@@ -682,7 +674,7 @@ def get_current_tile_info(coord, can_bomb, bombs, deadly_coords, blast_coords, b
             return 2
         if surrounding_blow_count(coord, arena, enemy_locations) >= 1: #destroy at least 1 crates/opponents
             return 1
-    print("we here :(")
+    #print("we here :(")
     return 0
 
 def get_mode(visible_coins, coins_remaining, num_opps_left):
@@ -718,138 +710,7 @@ def store_unrecoverable_infos_helper(old_game_state, new_game_state):
     return len(coins_old.difference(coins_new)), opponents_scores
 
 
-class PreviousWinner(Features):
-    # features used by 'No Time For Caution'
-    __slots__ = "features"
-    features : list[int]
-
-    def __init__(self, game_state: dict):
-        # Relevant Game State Information
-        arena = np.array([game_state["field"]])[0]
-        coins = game_state["coins"]
-        bombs = []
-        bombs_countdown = []
-        if len(game_state["bombs"]):
-            for i in range(len(game_state["bombs"])):
-                bombs.append(game_state["bombs"][i][0])
-                bombs_countdown.append(game_state["bombs"][i][1])
-        blast_coords = []
-        blast_countdowns = []
-        for idx, bomb_coord in enumerate(bombs):
-            for coord in get_blast_coords(bomb_coord, arena):
-                if coord not in blast_coords:
-                    blast_coords.append(coord)
-                    blast_countdowns.append(bombs_countdown[idx] + 1)
-                else:
-                    idxx = blast_coords.index(coord)
-                    blast_countdowns[idxx] = min(blast_countdowns[idxx], bombs_countdown[idx] + 1)
-
-        # player agent location
-        location = np.array([game_state["self"][3][0], game_state["self"][3][1]])
-        origin_xy = location[0], location[1]
-
-        # neighbouring tiles
-        neighboring_tiles = get_neighbor_coords(origin_xy) # [up, right, down, left]
-
-        # enemy locations
-        enemy_locations = []
-        if len(game_state["others"]):
-            for i in range(len(game_state["others"])):
-                enemy_locations.append(game_state["others"][i][3])
-
-        self.features = []
-        game_mode = get_mode(len(game_state["coins"]), game_state["remaining_coins"])  # game mode feature
-
-        # find neighboring tile nearest to coin and neighboring tile nearest to enemy agent
-        nearest_coin_distance = 99
-        nearest_enemy_distance = 99
-        nearest_tile_to_coin = origin_xy
-        nearest_tile_to_enemy = origin_xy
-
-        for coord in neighboring_tiles:
-            coin_dist, nearest_coin = nearest_entity_distance(coord, coins)
-            enemy_dist, nearest_enemy = nearest_entity_distance(coord, enemy_locations)
-            if coin_dist < nearest_coin_distance:
-                nearest_coin_distance = coin_dist
-                nearest_tile_to_coin = coord
-            if enemy_dist < nearest_enemy_distance:
-                nearest_enemy_distance = enemy_dist
-                nearest_tile_to_enemy = coord
-
-        # find nearest coin and enemy to current position
-        nearest_coin_distance, nearest_coin = nearest_entity_distance(origin_xy, coins)
-        nearest_enemy_distance, nearest_enemy = nearest_entity_distance(origin_xy, enemy_locations)
-
-        # find neighboring tile that would do the most blowing up damage
-        max_blow_count = surrounding_blow_count(origin_xy, arena, enemy_locations)
-        most_destructive_tile = origin_xy
-
-        for coord in neighboring_tiles:
-            blow_count = surrounding_blow_count(coord, arena, enemy_locations)
-            if blow_count > max_blow_count:
-                max_blow_count = blow_count
-                most_destructive_tile = coord
-
-        if max_blow_count == 0:
-            nearest_crate_distance = 0
-            crates = np.argwhere(arena == 1)
-            for coord in neighboring_tiles:
-                crate_dist, nearest_crate = nearest_entity_distance(coord, crates)
-                if crate_dist < nearest_crate_distance:
-                    nearest_crate_distance = crate_dist
-                    most_destructive_tile = coord
-
-        # find which neighboring tile, if any, yields safe death
-        yields_safe_death = [False for i in range(4)]
-        for idx, coord in enumerate(neighboring_tiles):
-            if safe_death(coord, blast_coords, game_mode):
-                yields_safe_death[idx] = True
-
-        # find which neighboring tile, if any, yields possible danger
-        is_dangerous = [False for i in range(4)]
-        for idx, coord in enumerate(neighboring_tiles):
-            if possibly_yields_danger(coord, nearest_enemy, arena):
-                is_dangerous[idx] = True
-
-        # information on neighboring fields
-        for idx, coord in enumerate(neighboring_tiles):
-            self.features.append(
-                get_neighboring_tile_info(coord, idx, coins, bombs, arena, enemy_locations, game_mode, nearest_tile_to_coin,
-                                          nearest_tile_to_enemy, most_destructive_tile, yields_safe_death, is_dangerous))
-
-        # information on current field
-        self.features.append(get_current_tile_info(origin_xy, bombs, blast_coords, game_mode, arena, enemy_locations))  # tile self
-
-        # game mode
-        self.features.append(game_mode)
-
-        # print(np.array([[0, self.features[0], 0],
-        #                 [self.features[3], self.features[4], self.features[1]],
-        #                 [0, self.features[2], self.features[5]]]))
-
-    def __repr__(self):
-        return ''.join(str(e) for e in self.features)
-
-
-    def get_all_sym_str(self) -> tuple[list[str], list[tuple[int, int]]]:
-        feature_as_matrix = np.array([self.features[0:2], self.features[2:4]])
-        transforms = []
-        sym_str = []
-
-        for rot in range(4):
-            for flip in [0, 1]:
-                transforms.append((rot, flip))
-
-                transformed_matrix = np.rot90(feature_as_matrix, k=rot)
-                if flip:
-                    transformed_matrix = transformed_matrix.T
-                sym_str.append(''.join(str(e) for e in transformed_matrix.flatten()) + ''.join(str(e) for e in self.features[4:]))
-
-        return sym_str, transforms
-
-
-
-class PreviousWinnerCD(Features):
+class DeusExMachinaFeatures(Features):
     # features used by 'No Time For Caution' with certain death check
     __slots__ = "features"
     features : list[int]

@@ -4,10 +4,10 @@ import glob
 import json
 import numpy as np
 
-from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from ..parameter_decay import Explorer, PiggyCarry
+from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
+from agent_code.utils.parameter_decay import Explorer, PiggyCarry
 
-from ..features import PreviousWinnerCD
+from agent_code.utils.features import PreviousWinnerCD
 
 ALGORITHM = 'q-learning'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -143,7 +143,7 @@ def act(self, game_state: dict) -> str:
         self.own_bomb_new = None
 
     # Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         if self.prev_game_state is not None:
             self.remaining_coins_old = self.remaining_coins_new
             self.own_bomb_old = self.own_bomb_new
@@ -172,7 +172,7 @@ def act(self, game_state: dict) -> str:
     # Symmetry check
     transform = None
     if type(state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
+        if self.feature not in ["RollingWindow", "DeusExMachinaFeatures"]:
             self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
         state_idx = check_state_exist_w_sym(self, state_str[0])
         if state_idx is None or state_str[1][0] is None:
@@ -247,7 +247,7 @@ def time_for_bed(game_state, self):
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
         # append new state to tables
-        if self.feature in ["PreviousWinnerCD"] and False:
+        if self.feature in ["DeusExMachinaFeatures"] and False:
             self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
             for i in range(4):
                 if state_str[i] == "1" :

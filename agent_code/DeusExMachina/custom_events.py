@@ -1,6 +1,9 @@
 from typing import List
 
-from agent_code.features import get_blast_coords, is_path_possible_astar
+import numpy as np
+
+from .features import get_blast_coords, is_path_possible_astar, get_mode
+
 
 class CustomEvents:
     DECREASED_NEAREST_COIN_DIST = "DECREASED_NEAREST_COIN_DIST"
@@ -12,6 +15,10 @@ class CustomEvents:
     IS_NOW_SAFE = "IS_NOW_SAFE"
     IS_NOW_UNSAFE = "IS_NOW_UNSAFE"
     NO_CHANGE_IN_TILE_SAFETY = "NO_CHANGE_IN_TILE_SAFETY"
+    DECREASED_NEAREST_ENEMY_DIST = "DECREASED_NEAREST_ENEMY_DIST"
+    SAME_NEAREST_ENEMY_DIST = "SAME_NEAREST_ENEMY_DIST"
+    INCREASED_NEAREST_ENEMY_DIST = "INCREASED_NEAREST_ENEMY_DIST"
+
 
 def state_to_events(old_game_state: dict, action_taken: str, new_game_state: dict, killed_opponents_scores,
                     end_of_round) -> List[str]:
@@ -27,9 +34,36 @@ def state_to_events(old_game_state: dict, action_taken: str, new_game_state: dic
 
         # State changed from safe/unsafe events
         custom_events.append(safe_or_unsafe_event(old_game_state, new_game_state))
+        custom_events.append(enemy_event(old_game_state, new_game_state))
 
     return list(filter(None, custom_events))
 
+def enemy_event(old_game_state, new_game_state):
+    old_player_pos = old_game_state["self"][3]
+    new_player_pos = new_game_state["self"][3]
+    enemies = old_game_state["others"]
+    coins_reachable = np.count_nonzero([is_path_possible_astar(old_game_state["field"], old_player_pos, coin) for coin in old_game_state["coins"]])
+    game_mode = get_mode(coins_reachable, old_game_state["remaining_coins"], len(old_game_state["others"]))
+    if game_mode == 2 and len(new_game_state["others"]) > 0:
+        old_min_enemy_dist = 99
+        old_nearest_enemy_pos = None
+        old_nearest_enemy_name = None
+        for enemy in enemies:
+            enemy_pos = enemy[3]
+            dist = manhattan_distance(old_player_pos, enemy_pos)
+            if dist < old_min_enemy_dist:
+                old_min_enemy_dist = dist
+                old_nearest_enemy_pos = enemy_pos
+                old_nearest_enemy_name = enemy[0]
+            new_distance_from_enemy = manhattan_distance(new_player_pos, old_nearest_enemy_pos)
+            if old_nearest_enemy_name in [enemy[0] for enemy in new_game_state["others"]]:
+                if new_distance_from_enemy < old_min_enemy_dist:
+                    return CustomEvents.DECREASED_NEAREST_ENEMY_DIST
+                elif new_distance_from_enemy > old_min_enemy_dist:
+                    return CustomEvents.INCREASED_NEAREST_ENEMY_DIST
+                elif new_distance_from_enemy == old_min_enemy_dist:
+                    return CustomEvents.SAME_NEAREST_ENEMY_DIST
+    return None
 
 def won_or_lost_event(killed_opponents_scores, new_game_state):
     self_score = new_game_state["self"][1]

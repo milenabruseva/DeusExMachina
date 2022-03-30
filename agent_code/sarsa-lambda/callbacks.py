@@ -4,12 +4,8 @@ import glob
 import json
 import numpy as np
 
-import random
-
-from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from ..parameter_decay import Explorer
-
-from ..features import PreviousWinnerCD
+from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
+from agent_code.utils.parameter_decay import Explorer
 
 ALGORITHM = 'sarsa-lambda'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -128,7 +124,7 @@ def act(self, game_state: dict) -> str:
     #print("-----------------------")
 
     # Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         if self.prev_game_state is not None:
             self.remaining_coins_old = self.remaining_coins_new
             self.own_bomb_old = self.own_bomb_new
@@ -172,7 +168,7 @@ def act(self, game_state: dict) -> str:
         action = self.next_action
     else:
         action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
-        #PreviousWinnerCD(game_state).print_me()
+        #DeusExMachinaFeatures(game_state).print_me()
 
     # Transform action
     if transform is not None:

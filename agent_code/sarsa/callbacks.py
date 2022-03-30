@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from ..features import QFeatures
+from agent_code.utils.features import QFeatures
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 

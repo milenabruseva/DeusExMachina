@@ -61,17 +61,34 @@ classic = {
 
 classic_plus = {
     e.COIN_COLLECTED: 100,
-    e.GOT_KILLED: -80,
-    e.KILLED_SELF: -50,
+    e.GOT_KILLED: -50,
+    e.KILLED_SELF: -30,
     e.INVALID_ACTION: -500,
     e.COIN_FOUND: 3,
     e.KILLED_OPPONENT: 500,
     e.CRATE_DESTROYED: 15,
     ce.DECREASED_NEAREST_COIN_DIST: 10,
     ce.INCREASED_NEAREST_COIN_DIST: -11,
-    ce.SAME_NEAREST_COIN_DIST: -11,
+    #ce.SAME_NEAREST_COIN_DIST: -11,
     ce.IS_NOW_SAFE: 10,
     ce.IS_NOW_UNSAFE: -11
+}
+
+classic_plus_adil = {
+    e.COIN_COLLECTED: 10,
+    e.GOT_KILLED: -50,
+    e.KILLED_SELF: -50,
+    e.INVALID_ACTION: -5,
+    e.COIN_FOUND: 3,
+    e.KILLED_OPPONENT: 50,
+    e.CRATE_DESTROYED: 3,
+    ce.DECREASED_NEAREST_COIN_DIST: 0.1,
+    ce.INCREASED_NEAREST_COIN_DIST: -0.1,
+    #ce.SAME_NEAREST_COIN_DIST: -11,
+    ce.IS_NOW_SAFE: 0.5,
+    ce.IS_NOW_UNSAFE: -0.5,
+    e.WAITED: -0.1,
+    e.BOMB_DROPPED: 2
 }
 
 # Dynamic Reward Functions
@@ -99,7 +116,8 @@ reward_set_strings = {"no_1": game_rewards_no_1,
                       "coin_focus": coin_heaven,
                       "coin_minimal": coin_minimal,
                       "classic": classic,
-                      "classic_plus": classic_plus}
+                      "classic_plus": classic_plus,
+                      "classic_plus_adil": classic_plus_adil}
 
 dynamic_rewards_strings = {"coin_dist": nearest_coin_distance}
 

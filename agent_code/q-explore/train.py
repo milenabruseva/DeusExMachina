@@ -2,14 +2,11 @@ from typing import List
 import json
 import numpy as np
 
-import events as e
-import settings as s
-
 from .callbacks import ALGORITHM
-from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str
-from ..reward_sets import RewardGiver
-from ..custom_events import state_to_events
+from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action
+from agent_code.utils.features import state_dict_to_feature_str
+from agent_code.utils.reward_sets import RewardGiver
+from agent_code.utils.custom_events import state_to_events
 
 
 def setup_training(self):

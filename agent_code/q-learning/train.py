@@ -2,15 +2,12 @@ from typing import List
 import json
 import numpy as np
 
-import events as e
-import settings as s
-
 from .callbacks import ALGORITHM
-from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action, act
-from ..features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from ..reward_sets import RewardGiver
-from ..custom_events import state_to_events
-from ..parameter_decay import AlphaDecayer, QUpdater
+from .callbacks import check_state_exist_and_add, check_state_exist_w_sym, action_layout_to_action
+from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
+from agent_code.utils.reward_sets import RewardGiver
+from agent_code.utils.custom_events import state_to_events
+from agent_code.utils.parameter_decay import AlphaDecayer, QUpdater
 
 
 def setup_training(self):
@@ -56,7 +53,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     ### Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         # Old game state of training is (new) game_state of act
         old_game_state["remaining_coins"] = self.remaining_coins_new
         old_game_state["own_bomb"] = self.own_bomb_new
@@ -86,7 +83,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Symmetry check
     new_state_transform = None
     if type(old_state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
+        if self.feature not in ["RollingWindow", "DeusExMachinaFeatures"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None or old_state_str[1][0] is None:
@@ -167,7 +164,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     ### Store unrecoverable game state information
-    if self.feature in ["PreviousWinner", "PreviousWinnerCD"]:
+    if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         # Old game state of training is (new) game_state of act
         self.prev_game_state["remaining_coins"] = self.remaining_coins_new
         self.prev_game_state["own_bomb"] = self.own_bomb_new
@@ -192,7 +189,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Symmetry check
     if type(old_state_str) is not str:
-        if self.feature not in ["RollingWindow", "PreviousWinnerCD"]:
+        if self.feature not in ["RollingWindow", "DeusExMachinaFeatures"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None or old_state_str[1][0] is None:

@@ -6,7 +6,7 @@ import numpy as np
 
 import random
 
-from ..features import state_dict_to_feature_str
+from agent_code.utils.features import state_dict_to_feature_str
 
 ALGORITHM = 'q-explore'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
