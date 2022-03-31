@@ -41,15 +41,21 @@ def setup(self):
         self.learning_type = params["learning_type"]
         self.learning_param = params["learning_param"]
         self.save_n_rounds = params["save_n_rounds"]
-        self.train_fast = params["train_fast"]
 
         self.event_reward_set = params["event_reward_set"]
         self.dyn_rewards = params["dyn_rewards"]
 
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]
-    self.q_table = {}
-    self.n_table = {}
+
+        self.train_fast = params["train_fast"]
+        self.evaluate = params["evaluate"]
+
+    # Switch to best if evaluating
+    if self.evaluate and not self.train:
+        if not self.train:
+            self.explorer_type = "best"
+
     if self.explorer_type != "piggyback":
         self.explorer = Explorer(self.explorer_type, self.exp_param)
     else:
@@ -82,6 +88,10 @@ def setup(self):
                                     break
                                 else:
                                     self.logger.warn(f"q_table {self.q_table_filename} found without corresponding n_table.")
+
+    ### Setup tables
+    self.q_table = {}
+    self.n_table = {}
 
     if not (self.q_table_filename == '' or self.n_table_filename == ''):
         self.logger.info(f"Loading q_table from {self.q_table_filename} and n_table from {self.n_table_filename}")

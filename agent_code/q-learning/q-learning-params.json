@@ -10,11 +10,13 @@
   "learning_type": "ln/n",
   "learning_param": 1.5,
   "save_n_rounds": 1000,
-  "train_fast": true,
 
   "event_reward_set": "classic",
   "dyn_rewards": [],
 
   "feature": "DeusExMachinaFeatures",
-  "q_table_id": "3_strong_rule_based_classic"
+  "q_table_id": "3_strong_rule_based_classic",
+
+  "train_fast": true,
+  "evaluate": false
 }
