@@ -46,12 +46,6 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if old_game_state is None:
         return
 
-    ### Calculate custom events from states
-    events.extend(state_to_events(old_game_state, self_action, new_game_state, self.killed_opponents_scores, False))
-    if not self.train_fast:
-        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-
     ### Store unrecoverable game state information
     if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
         # Old game state of training is (new) game_state of act
@@ -72,6 +66,11 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         new_game_state["remaining_coins"] = remaining_coins_new
         new_game_state["own_bomb"] = own_bomb_new
 
+    ### Calculate custom events from states
+    events.extend(state_to_events(old_game_state, self_action, new_game_state, self.killed_opponents_scores, False))
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     ### Transform state to all equivalent strings and action to index
     debug_old_state_str = old_state_str = self.prev_game_state_str
@@ -139,6 +138,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     ### Save state string and transform in short term memory
     self.next_game_state_str = ([new_state_str], [new_state_transform])
+    self.total_rewards += reward
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -155,13 +155,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
 
-    ### Calculate custom events from states
-    events.extend(
-        state_to_events(self.prev_game_state, last_action, last_game_state, self.killed_opponents_scores, False))
 
-    if not self.train_fast:
-        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
-        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     ### Store unrecoverable game state information
     if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
@@ -181,6 +175,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
         last_game_state["remaining_coins"] = remaining_coins_new
         last_game_state["own_bomb"] = own_bomb_new
+
+    ### Calculate custom events from states
+    events.extend(
+        state_to_events(self.prev_game_state, last_action, last_game_state, self.killed_opponents_scores, False))
+
+    if not self.train_fast:
+        self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
+        print(f'Encountered game event(s) {", ".join(map(repr, events))} in step {last_game_state["step"]}')
 
     ### Transform state to string and action to index
     old_state_str = self.prev_game_state_str
@@ -236,4 +238,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             n_table["meta"] = {"algorithm": ALGORITHM, "feature": self.feature, "q_table_id": self.q_table_id}
             json.dump(q_table, q_table_file, indent=4, sort_keys=True)
             json.dump(n_table, n_table_file, indent=4, sort_keys=True)
+
+        with open("rewards.txt", "a") as rewards_file:
+            rewards_file.write(str(self.total_rewards / last_game_state["round"]) + "\n")
 

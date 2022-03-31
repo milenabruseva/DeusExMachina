@@ -1,20 +1,20 @@
 {
   "reward_decay": 0.99,
-  "explorer": "e_greedy",
-  "exp_param": 0.1,
+  "explorer": "piggyback",
+  "exp_param": 0.05,
   "piggy_name": "agent_n",
 
   "update_type": "q_max",
-  "update_param": 10,
+  "update_param": 1,
 
-  "learning_type": "1/n",
-  "learning_param": 2,
+  "learning_type": "ln/n",
+  "learning_param": 1.5,
   "save_n_rounds": 1000,
   "train_fast": true,
 
-  "event_reward_set": "classic_plus",
+  "event_reward_set": "classic",
   "dyn_rewards": [],
 
-  "feature": "PreviousWinnerCD",
+  "feature": "DeusExMachinaFeatures",
   "q_table_id": "3_strong_rule_based_classic"
 }

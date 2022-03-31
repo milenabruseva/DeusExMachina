@@ -7,7 +7,7 @@ import numpy as np
 from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
 from agent_code.utils.parameter_decay import Explorer, PiggyCarry
 
-from agent_code.utils.features import PreviousWinnerCD
+from agent_code.utils.features import DeusExMachinaFeatures
 
 ALGORITHM = 'q-learning'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -106,6 +106,7 @@ def setup(self):
     self.killed_opponents_scores = {}
     self.own_bomb_old = None
     self.own_bomb_new = None
+    self.total_rewards = 0
 
     # Action layout for symmetry transformations
     self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
@@ -123,13 +124,6 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
-
-    #state = LocalVision(game_state)
-    #print(state.vision.T)
-    #print(state.explosion_map.T)
-    #print("-----------------------")
-
-    pure_game_state = game_state
 
     # Reset at game start:
     if game_state["step"] == 1:
@@ -205,7 +199,7 @@ def act(self, game_state: dict) -> str:
 
     if not self.train_fast:
         print("In act()")
-        PreviousWinnerCD(game_state).print_me()
+        DeusExMachinaFeatures(game_state).print_me()
         qs = self.q_table[state_str]
         qviz = np.array([[np.NAN, qs[0], np.NAN],
                          [qs[3], qs[4], qs[1]],
