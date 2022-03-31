@@ -47,16 +47,21 @@ coin_minimal = {
 }
 
 classic = {
-    e.COIN_COLLECTED: 100,
-    e.GOT_KILLED: -80,
+    e.COIN_COLLECTED: 10,
+    e.GOT_KILLED: -50,
     e.KILLED_SELF: -50,
-    e.INVALID_ACTION: -500,
-    #ce.DECREASED_NEAREST_COIN_DIST: 10,
-    #ce.INCREASED_NEAREST_COIN_DIST: -11,
-    #ce.SAME_NEAREST_COIN_DIST: -11,
+    e.INVALID_ACTION: -5,
     e.COIN_FOUND: 3,
-    e.KILLED_OPPONENT: 500,
-    e.CRATE_DESTROYED: 15
+    e.KILLED_OPPONENT: 50,
+    e.CRATE_DESTROYED: 3,
+    ce.DECREASED_NEAREST_COIN_DIST: 0.1,
+    ce.INCREASED_NEAREST_COIN_DIST: -0.1,
+    ce.IS_NOW_SAFE: 0.5,
+    ce.IS_NOW_UNSAFE: -0.5,
+    e.WAITED: -0.1,
+    e.BOMB_DROPPED: 2,
+    ce.DECREASED_NEAREST_ENEMY_DIST: 0.05,
+    ce.INCREASED_NEAREST_ENEMY_DIST: -0.05
 }
 
 classic_plus = {
@@ -146,8 +151,8 @@ class RewardGiver:
         for event in events:
             if event in self.event_reward_set:
                 reward_sum += self.event_reward_set[event]
-        # self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-
+        #self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+        #print(f"Awarded {reward_sum} for events {', '.join(events)}")
         return reward_sum
 
 
