@@ -1,0 +1,22 @@
+{
+  "reward_decay": 0.99,
+  "explorer": "best",
+  "exp_param": 0.0,
+  "piggy_name": "agent_n",
+
+  "use_lambda": true,
+  "trace_decay": 0.9,
+
+  "learning_type": "ln/n",
+  "learning_param": 1.5,
+  "save_n_rounds": 1,
+
+  "event_reward_set": "classic",
+  "dyn_rewards": [],
+
+  "feature": "DeusExMachinaFeatures",
+  "q_table_id": "3_strong_rule_based_classic",
+
+  "train_fast": true,
+  "evaluate": false
+}

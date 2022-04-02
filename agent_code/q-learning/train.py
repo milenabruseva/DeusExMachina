@@ -84,6 +84,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if type(old_state_str) is not str:
         if self.feature not in ["RollingWindow", "DeusExMachinaFeatures"]:
             self.logger.warn(f"Non-single-state-string not implemented for {self.feature} yet.")
+
+        # old state
         old_idx = check_state_exist_w_sym(self, old_state_str[0])
         if old_idx is None or old_state_str[1][0] is None:
             # Just use the first entry w/o transform
@@ -97,8 +99,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
                 if transform[1]:
                     transformed_action_layout = transformed_action_layout.T
                 action = action_layout_to_action(self, transformed_action_layout, action)
-        new_idx = check_state_exist_w_sym(self, new_state_str[0])
 
+        # new state
+        new_idx = check_state_exist_w_sym(self, new_state_str[0])
         if new_idx is None:
             # Just use the first entry w/o transform
             new_state_str = new_state_str[0][0]
@@ -106,8 +109,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
             # Use transformed
             new_state_transform = new_state_str[1][new_idx]
             new_state_str = new_state_str[0][new_idx]
+
     check_state_exist_and_add(self, new_state_str)
-    #check_state_exist_and_add(self, old_state_str)
 
     # old state-action pair visited ++1
     try:

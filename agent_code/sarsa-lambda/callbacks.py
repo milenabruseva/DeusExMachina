@@ -5,9 +5,11 @@ import json
 import numpy as np
 
 from agent_code.utils.features import state_dict_to_feature_str, store_unrecoverable_infos_helper
-from agent_code.utils.parameter_decay import Explorer
+from agent_code.utils.parameter_decay import Explorer, PiggyCarry
 
-ALGORITHM = 'sarsa-lambda'
+from agent_code.utils.features import DeusExMachinaFeatures
+
+ALGORITHM = 'sarsa'
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 
@@ -23,29 +25,41 @@ def setup(self):
     self.ACTIONS = ACTIONS
     self.actions = range(len(ACTIONS))
 
-    with open("sarsa-lambda-params.json") as params_file:
-        self.logger.info("Loading sarsa-lambda parameters from json file")
+    with open("sarsa-params.json") as params_file:
+        self.logger.info("Loading sarsa parameters from json file")
 
         params = json.load(params_file)
 
         self.gamma = params["reward_decay"]
         self.explorer_type = params["explorer"]
-        self.upd_param = params["exp_param"]
+        self.exp_param = params["exp_param"]
+        self.exp_name = params["piggy_name"]
+
+        self.use_lambda = params["use_lambda"]
+        self.lambda_ = params["trace_decay"]
 
         self.learning_type = params["learning_type"]
         self.learning_param = params["learning_param"]
-        self.lambda_ = params["trace_decay"]
         self.save_n_rounds = params["save_n_rounds"]
-        self.train_fast = params["train_fast"]
 
         self.event_reward_set = params["event_reward_set"]
         self.dyn_rewards = params["dyn_rewards"]
 
         self.feature = params["feature"]
         self.q_table_id = params["q_table_id"]
-    self.q_table = {}
-    self.n_table = {}
-    self.explorer = Explorer(self.explorer_type, self.upd_param)
+
+        self.train_fast = params["train_fast"]
+        self.evaluate = params["evaluate"]
+
+    # Switch to best if evaluating
+    if self.evaluate and not self.train:
+        if not self.train:
+            self.explorer_type = "best"
+
+    if self.explorer_type != "piggyback":
+        self.explorer = Explorer(self.explorer_type, self.exp_param)
+    else:
+        self.piggy = PiggyCarry(self.logger, self.exp_name, self.exp_param)
 
     # Check for q/n_table and load q_table from json
     q_table_filenames = glob.glob('q_table*.json')
@@ -75,6 +89,10 @@ def setup(self):
                                 else:
                                     self.logger.warn(f"q_table {self.q_table_filename} found without corresponding n_table.")
 
+    ### Setup tables
+    self.q_table = {}
+    self.n_table = {}
+
     if not (self.q_table_filename == '' or self.n_table_filename == ''):
         self.logger.info(f"Loading q_table from {self.q_table_filename} and n_table from {self.n_table_filename}")
         del last_q_table_dict["meta"]
@@ -89,22 +107,23 @@ def setup(self):
         self.q_table_filename = f'q_table_{date_time_str}.json'
         self.n_table_filename = f'n_table_{date_time_str}.json'
 
-   # Action layout for symmetry transformations
-    self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
-                                   [self.ACTIONS.index("LEFT"), 6, self.ACTIONS.index("RIGHT")],
-                                   [6, self.ACTIONS.index("DOWN"), 6]], dtype=np.int8)
-
-    # Instantiate Eligibility Trace (dict of array with array[0] the action, array[1] the trace)
-    self.eligibility_trace = {}
-
     # Long/Short Term Memory
+    self.prev_game_state_str = None
+    self.next_game_state_str = None
     self.prev_game_state = None
     self.remaining_coins_old = 9
     self.remaining_coins_new = 9
     self.killed_opponents_scores = {}
     self.own_bomb_old = None
     self.own_bomb_new = None
+    self.total_rewards = 0
 
+    # Action layout for symmetry transformations
+    self.action_layout = np.array([[6, self.ACTIONS.index("UP"), 6],
+                                   [self.ACTIONS.index("LEFT"), 6, self.ACTIONS.index("RIGHT")],
+                                   [6, self.ACTIONS.index("DOWN"), 6]], dtype=np.int8)
+
+    # Toggle for sarsa action selection vs. "prediction"
     self.can_act = True
 
 
@@ -118,10 +137,16 @@ def act(self, game_state: dict) -> str:
     :return: The action to take as a string.
     """
 
-    #state = LocalVision(game_state)
-    #print(state.vision.T)
-    #print(state.explosion_map.T)
-    #print("-----------------------")
+    # Reset at game start:
+    if game_state["step"] == 1:
+        self.prev_game_state_str = None
+        self.next_game_state_str = None
+        self.prev_game_state = None
+        self.remaining_coins_old = 9
+        self.remaining_coins_new = 9
+        self.killed_opponents_scores = {}
+        self.own_bomb_old = None
+        self.own_bomb_new = None
 
     # Store unrecoverable game state information
     if self.feature in ["PreviousWinner", "DeusExMachinaFeatures"]:
@@ -145,15 +170,18 @@ def act(self, game_state: dict) -> str:
         game_state["own_bomb"] = self.own_bomb_new
 
 
-    state_str = state_dict_to_feature_str(game_state, self.feature)
+    if self.next_game_state_str is not None:
+        state_str = self.next_game_state_str
+    else:
+        state_str = state_dict_to_feature_str(game_state, self.feature)
 
     # Symmetry check
     transform = None
     if type(state_str) is not str:
-        if self.feature != "RollingWindow":
+        if self.feature not in ["RollingWindow", "DeusExMachinaFeatures"]:
             self.logger.warn("Non-single-state-string only implemented for RollingWindow yet.")
         state_idx = check_state_exist_w_sym(self, state_str[0])
-        if state_idx is None:
+        if state_idx is None or state_str[1][0] is None:
             # Just use the first entry w/o transform
             state_str = state_str[0][0]
         else:
@@ -167,11 +195,17 @@ def act(self, game_state: dict) -> str:
     if self.train and (self.next_action is not None) and (not self.can_act):
         action = self.next_action
     else:
-        action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+        if self.explorer_type != "piggyback":
+            action = self.explorer.explore(self.actions, self.q_table[state_str], self.n_table[state_str])
+        else:
+            action = ACTIONS.index(self.piggy.carry(game_state))
+
+        if time_for_bed(game_state, self):
+            action = ACTIONS.index("BOMB")
         #DeusExMachinaFeatures(game_state).print_me()
 
     # Transform action
-    if transform is not None:
+    if self.explorer_type != "piggyback" and transform is not None:
         if not (action >= 4):  # wait or bomb
             transformed_action_layout = self.action_layout
             if transform[1]:
@@ -179,13 +213,75 @@ def act(self, game_state: dict) -> str:
             transformed_action_layout = np.rot90(transformed_action_layout, k=(-1) * transform[0])
             action = action_layout_to_action(self, transformed_action_layout, action)
 
+    if not self.train_fast:
+        print("In act()")
+        DeusExMachinaFeatures(game_state).print_me()
+        qs = self.q_table[state_str]
+        qviz = np.array([[np.NAN, qs[0], np.NAN],
+                         [qs[3], qs[4], qs[1]],
+                         [np.NAN, qs[2], qs[5]]])
+        if transform is not None:
+            if transform[1]:
+                qviz = qviz.T
+            qviz = np.rot90(qviz, k=(-1) * transform[0])
+        print(qviz)
+        print("Action took: "+ACTIONS[action])
+
+    # Save state string and transform in short term memory
+    self.prev_game_state_str = ([state_str], [transform])
+
     return ACTIONS[action]
+
+
+def time_for_bed(game_state, self):
+    self_score = game_state["self"][1]
+    remaining_points_possible = self.remaining_coins_new + len(game_state["others"]) * 5
+    max_opponent_scores_possible = {}
+
+    for opp in game_state["others"]:
+        max_opponent_scores_possible[opp[0]] = opp[1] + remaining_points_possible - 5
+
+    killed_opponents_winning = len({opponent:score for (opponent,score) in self.killed_opponents_scores.items() if score >= self_score})
+    living_opponents_can_win = len({opponent:score for (opponent,score) in max_opponent_scores_possible.items() if score >= self_score})
+
+    if self_score >= 10:
+        return True
+    elif not killed_opponents_winning and not living_opponents_can_win:
+        return True
+    elif remaining_points_possible == 0: # killed opponents are winning, but no more points possible
+        return True
+    else:
+        return False
 
 
 def check_state_exist_and_add(self, state_str):
     if state_str not in self.q_table:
         # append new state to tables
-        self.q_table[state_str] = [0] * len(self.actions)
+        if self.feature in ["DeusExMachinaFeatures"] and False:
+            self.q_table[state_str] = [8, 8, 8, 8, 7.9, 7.9]
+            for i in range(4):
+                if state_str[i] == "1" :
+                    self.q_table[state_str][i] = 10
+                elif state_str[i] == "2":
+                    self.q_table[state_str][i] = 0
+            if state_str[5] in ["0", "1", "2"]:
+                if state_str[:4].count("2") == 2 and ((state_str[:4].count("22") == 1) or (state_str[0] == "2" and state_str[3] == "2")):
+                    self.q_table[state_str][5] = -10
+                else:
+                    if state_str[4] == "0":
+                        pass
+                    elif state_str[4] == "1":
+                        self.q_table[state_str][5] = 10
+                    elif state_str[4] == "2":
+                        self.q_table[state_str][5] = 15
+                    elif state_str[4] == "3":
+                        self.q_table[state_str][5] = 20
+                    elif state_str[4] == "4":
+                        self.q_table[state_str][4] = -10
+                        self.q_table[state_str][5] = -10
+        else:
+            self.q_table[state_str] = [0] * len(self.actions)
+
         self.n_table[state_str] = [1] * len(self.actions)
 
 
