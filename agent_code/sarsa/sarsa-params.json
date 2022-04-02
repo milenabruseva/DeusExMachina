@@ -1,6 +1,6 @@
 {
   "reward_decay": 0.99,
-  "explorer": "best",
+  "explorer": "piggyback",
   "exp_param": 0.0,
   "piggy_name": "agent_n",
 
