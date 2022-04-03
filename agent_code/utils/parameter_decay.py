@@ -99,7 +99,7 @@ def epsilon_greedy(epsilon, available_actions, q_value, counts):
     return action
 
 def epsilon_decay(epsilon, available_actions, q_value, counts):
-    eps = 1/(sum(counts) - len(available_actions) + 1)
+    eps = (6/sum(counts)) ** epsilon
     if random.random() > eps:
         # some actions may have the same value, randomly choose one of these actions
         action = random.choice([idx for idx, val in enumerate(q_value) if val == max(q_value)])
