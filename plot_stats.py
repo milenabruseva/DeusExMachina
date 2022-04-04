@@ -61,4 +61,38 @@ def plot_stats(start_time):
             fig.savefig(os.path.join(path, 'all_agents.png'))
 
 
-plot_stats('2022-03-27 13:17:11.282461')
+def plot_learnability(agents, algorithm):
+    f = open("./agent_code/" + agents[0] + "/rewards.txt", "r")
+    agentA = [float(x.strip()) for x in f.readlines()]
+
+    f = open("./agent_code/" + agents[1] + "/rewards.txt", "r")
+    agentB = [float(x.strip()) for x in f.readlines()]
+
+    f = open("./agent_code/" + agents[2] + "/rewards.txt", "r")
+    agentC = [float(x.strip()) for x in f.readlines()]
+
+    f = open("./agent_code/" + agents[3] + "/rewards.txt", "r")
+    agentD = [float(x.strip()) for x in f.readlines()]
+
+    x = range(len(agentA))
+    path = os.path.join(os.getcwd(), "graphs", datetime.now().strftime("%Y%m%d%H%M%S"))
+    os.mkdir(path)
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(7, 5))
+    ax.plot(x, agentA, label=agents[0])
+    ax.plot(x, agentB, label=agents[1])
+    ax.plot(x, agentC, label=agents[2])
+    ax.plot(x, agentD, label=agents[3])
+    ax.set(xlabel="Number of training rounds times 100", ylabel="Average reward value per round")
+    ax.legend()
+    fig.suptitle("Learnability: " + algorithm, fontsize=16)
+    fig.savefig(os.path.join(path, 'learnability_' + algorithm + '.png'))
+
+
+plot_stats('2022-04-04 17:34:11.575268')
+#agents = ["sarsa-pureA", "sarsa-pureB", "sarsa-pureC", "sarsa-pureD"]
+#algorithm = "sarsa-pure"
+# agents = ["sarsa-lambdaA", "sarsa-lambdaB", "sarsa-lambdaC", "sarsa-lambdaD"]
+# algorithm = "sarsa-lambda"
+# agents = ["q-learningA", "q-learningB", "q-learningC", "q-learningD"]
+# algorithm = "q-learning"
+#plot_learnability(agents, algorithm)
