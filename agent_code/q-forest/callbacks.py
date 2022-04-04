@@ -151,8 +151,8 @@ def act(self, game_state: dict) -> str:
         valid_actions.append(ACTIONS.index('DOWN'))
         valid_movement_actions.append(ACTIONS.index('DOWN'))
     valid_actions.append(ACTIONS.index('WAIT'))
-    if game_state['step'] != 1:
-        valid_actions.append(ACTIONS.index('BOMB'))
+    # if game_state['step'] != 1:
+    valid_actions.append(ACTIONS.index('BOMB'))
 
 
     # Compute most voted valid action

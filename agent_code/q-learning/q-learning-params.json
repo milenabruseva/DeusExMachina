@@ -1,6 +1,6 @@
 {
   "reward_decay": 0.99,
-  "explorer": "piggyback",
+  "explorer": "best",
   "exp_param": 0.0,
   "piggy_name": "user_agent",
 
@@ -15,7 +15,7 @@
   "dyn_rewards": [],
 
   "feature": "DeusExMachinaFeatures",
-  "q_table_id": "debug",
+  "q_table_id": "final",
 
   "train_fast": false,
   "evaluate": false

@@ -495,18 +495,24 @@ def get_neighboring_tile_info(coord, idx, coins, bombs, arena, enemy_locations, 
 def safe_to_follow(player_pos, tile, coords, bombs, deadly_coords, blast_coords, arena, coins):
     if player_pos in bombs:
         safe_left = True
+        max_left = None
         safe_right = True
+        max_right = None
         safe_up = True
+        max_up = None
         safe_down = True
+        max_down = None
         x, y = tile
 
         if tile == coords[0]: #UP
-            for i in range(1, 3):
-                if 0 <= x <= 16 and 0 <= y - i <= 16:
-                    if arena[(x, y - i)] == 1 or arena[(x, y - i)] == -1 or (x, y - i) in deadly_coords:
-                        safe_up = False
+            for i in range(1, 4):
+                if safe_up:
+                    if 0 <= x <= 16 and 0 <= y - i <= 16:
+                        if arena[(x, y - i)] == 1 or arena[(x, y - i)] == -1 or (x, y - i) in deadly_coords:
+                            safe_up = False
+                            max_up = i
             if not safe_up:
-                for i in range(0, 2):
+                for i in range(0, max_up):
                     if 0 <= y - i <= 16:
                         if 0 <= x + 1 <= 16:
                             if (arena[(x + 1, y - i)] == 0 or (x + 1, y - i) in coins) and (x + 1, y - i) not in deadly_coords:
@@ -517,12 +523,14 @@ def safe_to_follow(player_pos, tile, coords, bombs, deadly_coords, blast_coords,
             return safe_up
 
         if tile == coords[2]: #DOWN
-            for i in range(1, 3):
-                if 0 <= x <= 16 and 0 <= y + i <= 16:
-                    if arena[(x, y + i)] == 1 or arena[(x, y + i)] == -1 or (x, y + i) in deadly_coords:
-                        safe_down = False
+            for i in range(1, 4):
+                if safe_down:
+                    if 0 <= x <= 16 and 0 <= y + i <= 16:
+                        if arena[(x, y + i)] == 1 or arena[(x, y + i)] == -1 or (x, y + i) in deadly_coords:
+                            safe_down = False
+                            max_down = i
             if not safe_down:
-                for i in range(0, 2):
+                for i in range(0, max_down):
                     if 0 <= y + i <= 16:
                         if 0 <= x + 1 <= 16:
                             if (arena[(x + 1, y + i)] == 0 or (x + 1, y + i) in coins) and (x + 1, y + i) not in deadly_coords:
@@ -533,12 +541,14 @@ def safe_to_follow(player_pos, tile, coords, bombs, deadly_coords, blast_coords,
             return safe_down
 
         if tile == coords[1]: #RIGHT
-            for i in range(1, 3):
-                if 0 <= x + i <= 16 and 0 <= y <= 16:
-                    if arena[(x + i, y)] == 1 or arena[(x + i, y)] == -1 or (x + i, y) in deadly_coords:
-                        safe_right = False
+            for i in range(1, 4):
+                if safe_right:
+                    if 0 <= x + i <= 16 and 0 <= y <= 16:
+                        if arena[(x + i, y)] == 1 or arena[(x + i, y)] == -1 or (x + i, y) in deadly_coords:
+                            safe_right = False
+                            max_right = i
             if not safe_right:
-                for i in range(0, 2):
+                for i in range(0, max_right):
                     if 0 <= x + i <= 16:
                         if 0 <= y + 1 <= 16:
                             if (arena[(x + i, y + 1)] == 0 or (x + i, y + 1) in coins) and (x + i, y + 1) not in deadly_coords:
@@ -549,12 +559,14 @@ def safe_to_follow(player_pos, tile, coords, bombs, deadly_coords, blast_coords,
             return safe_right
 
         if tile == coords[3]: #LEFT
-            for i in range(1, 3):
-                if 0 <= x - i <= 16 and 0 <= y <= 16:
-                    if arena[(x - i, y)] == 1 or arena[(x - i, y)] == -1 or (x - i, y) in deadly_coords:
-                        safe_left = False
+            for i in range(1, 4):
+                if safe_left:
+                    if 0 <= x - i <= 16 and 0 <= y <= 16:
+                        if arena[(x - i, y)] == 1 or arena[(x - i, y)] == -1 or (x - i, y) in deadly_coords:
+                            safe_left = False
+                            max_left = i
             if not safe_left:
-                for i in range(0, 2):
+                for i in range(0, max_left):
                     if 0 <= x - i <= 16:
                         if 0 <= y + 1 <= 16:
                             if (arena[(x - i, y + 1)] == 0 or (x - i, y + 1) in coins) and (x - i, y + 1) not in deadly_coords:
